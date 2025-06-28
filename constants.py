@@ -1,4 +1,6 @@
 # Constants
+
+# Columns to drop from the raw data
 CHANGE_COLS = [
     'ApD_sex_mix_1981_1991_percent_decadal_change',
     'ApD_sex_mix_1991_2001_percent_decadal_change',
@@ -8,6 +10,7 @@ CHANGE_COLS = [
     'QD_2001_2011_percent_decadal_change'
 ]
 
+# Mapping of cadre names to labels
 CADRE_LABEL_MAPPING = {
     'nurse': 'Nurse',
     'nursing cadres': 'Nurse',
@@ -21,6 +24,7 @@ CADRE_LABEL_MAPPING = {
     'supporting cadres': 'Supporting Cadres'
 }
 
+# Mapping of variable names to labels
 VARNAME_MAPPING = {
     'ApD_cadre_mix_Bhore': 'Acceptability Deficit (ApD) cadre-mix as per Bhore norms',
     'ApD_cadre_mix_HLEG': 'Acceptability Deficit (ApD) cadre-mix as per HLEG norms',
@@ -63,11 +67,13 @@ VARNAME_MAPPING = {
     'AvD_urban_UHC_90': 'Availability Deficit (AvD) for urban population\nas per UHC90 norms',
 }
 
+# Cadres of interest for the plots
 CADRES_OF_INTEREST = (
     'nurse', 'dentist', 'pharmacist', 'anm', 'ayush', 'doctor',
     'skilled health professionals'
 )
 
+# Mapping of state names to abbreviations
 STATE_ABBR = {
     'andhra pradesh': 'AP',
     'arunachal pradesh': 'AR',
@@ -105,3 +111,5 @@ STATE_ABBR = {
     'lakshadweep': 'LD',
     'puducherry': 'PY'
 }
+
+PROJECTION_YEAR = 2021

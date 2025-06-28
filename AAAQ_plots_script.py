@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
 
-from constants import *
+import constants as c
 from utils import *
 
 
@@ -349,9 +349,9 @@ if __name__ == "__main__":
     # Generate line plots
     generate_line_plots(
         cleaned=cleaned_stacked,
-        varname_mapping=VARNAME_MAPPING,
-        cadre_label_mapping=CADRE_LABEL_MAPPING,
-        cadres_of_interest=CADRES_OF_INTEREST,
+        varname_mapping=c.VARNAME_MAPPING,
+        cadre_label_mapping=c.CADRE_LABEL_MAPPING,
+        cadres_of_interest=c.CADRES_OF_INTEREST,
         proj_year=PROJ_YEAR,
         results_dir=RESULTS_DIR,
     )
@@ -360,8 +360,8 @@ if __name__ == "__main__":
     generate_map_plots(
         cleaned=cleaned_stacked,
         state_geoms=state_geometries,
-        varname_mapping=VARNAME_MAPPING,
-        cadre_label_mapping=CADRE_LABEL_MAPPING,
-        state_abbr=STATE_ABBR,
+        varname_mapping=c.VARNAME_MAPPING,
+        cadre_label_mapping=c.CADRE_LABEL_MAPPING,
+        state_abbr=c.STATE_ABBR,
         results_dir=RESULTS_DIR,
     )

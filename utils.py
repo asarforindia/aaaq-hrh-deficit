@@ -3,7 +3,7 @@ import pandas as pd
 import openpyxl
 from cartopy.io.shapereader import Reader
 
-from constants import *
+import constants as c
 
 
 def load_raw_data(excel_file: str) -> pd.DataFrame:
@@ -23,7 +23,7 @@ def load_raw_data(excel_file: str) -> pd.DataFrame:
     data = pd.read_excel(excel_file)
     unhidden = np.setdiff1d(np.arange(data.shape[1]), hidden_cols)
     data = data.iloc[:, unhidden].replace({"#DIV/0!": np.nan})
-    data = data.drop(CHANGE_COLS, axis=1, errors="ignore")
+    data = data.drop(c.CHANGE_COLS, axis=1, errors="ignore")
     return data
 
 
