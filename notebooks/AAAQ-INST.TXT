@@ -1,0 +1,88 @@
+Supplement tables
+Data sources S1 (sweta)
+NCO code S2
+NSS question code for qd S3
+Missing data S4 (vidhi and siddhesh)
+Population density weight S5
+Thresholds table S6
+Quality ratio for all years all states all cadre S7
+-----‐-------------------
+Results tables 
+Number of HRH needed in 2031 (additional and total) under both scenarios T1
+Recent and average decades change T2
+Header1: decadal change then cadres as column below that
+-------
+Additional material 
+Data dictionary for 3 files (3 files _ master/AvD_AsD_ApD/QD) AM1_AM2_AM3
+
+-----
+Line Figure
+5 line chart with 7 lines each
+Add shp
+Y axis limits change
+Extra polate 
+Solid lines solid circle previously
+Dotted line dotted circle future
+0 line dotted
+Legends check (singular)
+Y axis label
+No title for national
+State name title for states (supplement)
+
+Map Figures
+Hleg norm based 5 maps for 'all cadres'
+Title of maps inside the box 
+Legend qd is different
+Maps are wide, make it proportionate
+2011 shape file
+Label states
+Remove box margin of maps
+Common legend inside box
+------------
+
+Supplementary figures
+
+National other norms line trend: 
+5 (indices) x 4 (norms)= 20
+National maps: 295
+Line plots: 875
+
+checked: change Y limits to - [min - 0.1, max + 0.1] for that dataframe
+
+checked: dotted line everywhere, filled circles for data (1981- 2011) and hollow circles for projections (2021, 2031)
+
+checked: 0 line width reduction
+
+@917769050999 @919737709727 can you check if we have "doctor" or "doctors"? @17816584448 is going to use "doctor" for line plots.
+
+checked: Y axis label general format for line plots: Deficit name (shorthand). E.g. Availability Deficit (AvD), Accessibility Deficit (AsD), Acceptability Deficit (ApD), Quality Deficit (QD)
+
+Line plots: for India
+
+checked: Map title general format - Deficit name (shorthand): Cadre Group (yyyy) E.g., Quality Deficit (QD): All Cadres (2011)
+e.g., Availability Deficit (AvD) as per HLEG norms: Doctor (2001)
+
+checked: map: change legend from intervals to numbers, e.g., instead of marking 0-0.25 in the middle of the bar, let's mark 0 at bar start and 0.25 at the end of bar.
+
+legend for QD should go from 0 to +1. For others, -1 to +1.
+
+rejected: aspect ratio for Indian map checking: height should greater that width.
+
+@917769050999 need to check why some places too much data is missing for maps
+
+@917350373527 was your sript which has state-level India maps with state names/abbreviations on the map in Python or R? Can you share the script with @17816584448
+
+total 25 line plots and 300 map plots
+
+for QD, AsD, and ApD Sex-mix
+
+for AvD, ApD Cadre-mix
+
+Clean norm names to use:
+
+@917769050999 dataset link for Pushkar?
+
+norm names to use in map titles: 1. HLEG, 2. Bhore Committee, 3. UHC Eff. Cov. 80, 4. UHC Eff. Cov. 90, 5. IPHS, 6. MDG target, 7. SDG target
+
+@17816584448 👆
+
