@@ -21,6 +21,13 @@
                 "dashboard.py"
             ],
             "console": "integratedTerminal"
+        },
+        {
+            "name": "Python Debugger: AAAQ Plots Script",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "AAAQ_plots_script.py",
+            "console": "integratedTerminal"
         }
     ]
 }

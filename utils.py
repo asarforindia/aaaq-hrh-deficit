@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import openpyxl
+import shapefile
+import shapely
 from cartopy.io.shapereader import Reader
 
 import constants as c
@@ -67,17 +69,20 @@ def clean_data(data: pd.DataFrame) -> pd.Series:
     return cleaned["default"]
 
 
-def load_state_geometries(shapefile_path: str) -> dict:
+def load_state_geometries(
+    shapefile_path: str,
+) -> dict[str, shapely.geometry.Polygon]:
     """
     Reads the shapefile using cartopy.io.shapereader.Reader and returns a dictionary
     mapping state names (lowercased) to their geometries, with certain manual merges/renames.
     """
-    reader = Reader(shapefile_path)
-    state_geoms = {
-        record.attributes["ST_NM"].lower(): record.geometry
-        for record in reader.records()
-        if record.geometry is not None
-    }
+    with shapefile.Reader(shapefile_path) as reader:
+        state_geoms = {}
+        for shape, record in zip(reader.shapes(), reader.records()):
+            state_name = record["ST_NM"].lower()
+            if state_name not in state_geoms:
+                state_geoms[state_name] = shapely.geometry.shape(shape)
+
     # Handle special cases / name merges
     state_geoms["n.c.t. of delhi"] = state_geoms.pop("delhi")
     state_geoms["andaman & nicobar islands"] = state_geoms.pop("andaman & nicobar")
