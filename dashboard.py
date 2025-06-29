@@ -1,8 +1,10 @@
 import streamlit as st
-import pandas as pd
 import altair as alt
-import shapefile
 import geopandas as gpd
+import folium
+from streamlit_folium import st_folium
+import shapely
+import json
 
 import constants as c
 from utils import *
@@ -35,6 +37,23 @@ def load_map_geom() -> gpd.GeoDataFrame:
     return gpd.GeoDataFrame(
         [(k, v) for k, v in state_geoms.items()], columns=["state", "geometry"]
     )
+
+
+@st.cache_data
+def load_map_geojson() -> dict:
+    state_geoms = load_state_geometries(SHAPEFILE_PATH)
+    return {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "id": k,
+                "geometry": json.loads(shapely.to_geojson(v)),
+                "properties": {"state": k},
+            }
+            for k, v in state_geoms.items()
+        ],
+    }
 
 
 @st.cache_data
@@ -72,14 +91,11 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
 
         # Clip deficit column at -1, 1 for readable charts
         df[deficit_col] = np.clip(df[deficit_col], a_min=-1, a_max=1)
-
         # Set y-axis limits with a margin of 0.125
         y_min_margin = df[deficit_col].min() - 1
         y_max_margin = df[deficit_col].max() + 1
-
         # Add a column to indicate if year > PROJ_YEAR
         df["is_proj"] = df["year"].astype(int) >= c.PROJECTION_YEAR
-
         # Use the new altair selection API for interactive legend (show/hide by clicking legend)
         cadre_selection = alt.selection_point(fields=["Cadre Label"], bind="legend")
 
@@ -141,13 +157,36 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         st.altair_chart(chart, use_container_width=True)
 
 
-def display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, gdf):
+def display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, geojson):
     series = map_gb.get_group((chosen_var, chosen_year, chosen_cadre)).rename("deficit")
     df = series.reset_index().copy()
-    st.dataframe(df, height=300)
+    # st.dataframe(df, height=300)
 
-    gdf = gdf.merge(df, left_on="state", right_on="states")
-    st.dataframe(gdf, height=300)
+    m = folium.Map(
+        location=[23, 81],
+        zoom_start=5,
+        zoom_control=False,
+        scroll_wheel_zoom=False,
+        dragging=False,
+        extent=[-180, -90, 180, 90],
+    )
+
+    folium.Choropleth(
+        geo_data=geojson,
+        name="choropleth",
+        data=df,
+        columns=["states", "deficit"],
+        key_on="feature.id",
+        fill_color="RdYlGn",
+        fill_opacity=0.7,
+        line_opacity=0.2,
+        legend_name="Deficit",
+        highlight=True,
+    ).add_to(m)
+
+    folium.LayerControl().add_to(m)
+
+    st_folium(m, width=800, height=800)
 
 
 tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
@@ -174,7 +213,7 @@ with tab_lines:
 with tab_maps:
     st.title("Deficit over geography")
     map_gb = load_map_gb(EXCEL_FILE)
-    gdf = load_map_geom()
+    geojson = load_map_geojson()
 
     sidebar_col, _, main_col = st.columns([4, 1, 12])
 
@@ -193,4 +232,4 @@ with tab_maps:
         )
 
     with main_col:
-        display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, gdf)
+        display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, geojson)
