@@ -6,3 +6,4 @@ tmp/
 .venv/
 poetry.lock
 Results/
+.DS_Store

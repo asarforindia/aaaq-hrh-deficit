@@ -3,7 +3,7 @@ import pandas as pd
 import openpyxl
 import shapefile
 import shapely
-from cartopy.io.shapereader import Reader
+import json
 
 import constants as c
 
@@ -65,8 +65,26 @@ def clean_data(data: pd.DataFrame) -> pd.Series:
         extracted.to_numpy().tolist(), names=extracted.columns
     )
     cleaned = cleaned.stack([0, 1]).swaplevel("cadres", "year").sort_index()
-    cleaned = cleaned.drop(["goa", "daman & diu"], level="states")
+    cleaned = cleaned.drop(["daman & diu"], level="states")
     return cleaned["default"]
+
+
+def post_process_state_geoms(state_geoms: dict) -> dict:
+    # Handle special cases / name merges
+    state_geoms["n.c.t. of delhi"] = state_geoms.pop("delhi")
+    state_geoms["andaman & nicobar islands"] = state_geoms.pop("andaman & nicobar")
+    state_geoms["dadra & nagar haveli"] = state_geoms.pop(
+        "dadra and nagar haveli and daman and diu"
+    )
+    # Merge Jammu & Kashmir with Ladakh
+    state_geoms["jammu & kashmir"] = state_geoms["jammu & kashmir"].union(
+        state_geoms.pop("ladakh")
+    )
+    # Merge Andhra Pradesh and Telangana
+    state_geoms["andhra pradesh"] = state_geoms["andhra pradesh"].union(
+        state_geoms.pop("telangana")
+    )
+    return state_geoms
 
 
 def load_state_geometries(
@@ -83,21 +101,19 @@ def load_state_geometries(
             if state_name not in state_geoms:
                 state_geoms[state_name] = shapely.geometry.shape(shape)
 
-    # Handle special cases / name merges
-    state_geoms["n.c.t. of delhi"] = state_geoms.pop("delhi")
-    state_geoms["andaman & nicobar islands"] = state_geoms.pop("andaman & nicobar")
-    state_geoms["dadra & nagar haveli"] = state_geoms.pop(
-        "dadra and nagar haveli and daman and diu"
-    )
-    # Merge Jammu & Kashmir with Ladakh
-    state_geoms["jammu & kashmir"] = state_geoms["jammu & kashmir"].union(
-        state_geoms.pop("ladakh")
-    )
-    # Merge Andhra Pradesh and Telangana
-    state_geoms["andhra pradesh"] = state_geoms["andhra pradesh"].union(
-        state_geoms.pop("telangana")
-    )
-    return state_geoms
+    return post_process_state_geoms(state_geoms)
+
+
+def load_state_geometries_geojson(
+    geojson_path: str,
+) -> dict[str, shapely.geometry.Polygon]:
+    with open(geojson_path, "r") as f:
+        state_geoms = {}
+        for feature in json.load(f)["features"]:
+            state_geoms[feature["properties"]["ST_NM"].lower()] = (
+                shapely.geometry.shape(feature["geometry"])
+            )
+    return post_process_state_geoms(state_geoms)
 
 
 def determine_cadre_intersection(

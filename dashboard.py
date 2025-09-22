@@ -1,17 +1,27 @@
 import streamlit as st
 import altair as alt
-import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
 import shapely
+import numpy as np
 import json
+from datetime import datetime
+import branca.colormap as cm
 
 import constants as c
 from utils import *
 
+st.set_page_config(layout="wide")
+
 EXCEL_FILE = "Documents/14_07_22_VW_AAAQ_mastersheet__26_NOV_23.xlsx"
 SHAPEFILE_PATH = "Documents/maps-master/States/Admin2"
+GEOJSON_PATH = "Documents/india_states.geojson"
 RESULTS_DIR = "Results/raw-value-based"
+
+
+def print_with_timestamp(message):
+    print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]} - {message}")
+
 
 cadre_colors = {
     cadre: f"C{i}"
@@ -21,27 +31,26 @@ cadre_colors = {
 }
 
 st.title("AAAQ HRH Deficit Explorer")
-st.set_page_config(layout="wide")
 
 
 @st.cache_data
 def load_line_gb(excel_file: str):
     data = load_raw_data(excel_file)
     cleaned_data = clean_data(data)
-    return cleaned_data.groupby(["states", "variable"])
+    line_gb = cleaned_data.groupby(["states", "variable"])
 
+    state_opts, varname_opts = set(), set()
+    for s, v in line_gb.groups.keys():
+        state_opts.add(s)
+        varname_opts.add(v)
 
-@st.cache_data
-def load_map_geom() -> gpd.GeoDataFrame:
-    state_geoms = load_state_geometries(SHAPEFILE_PATH)
-    return gpd.GeoDataFrame(
-        [(k, v) for k, v in state_geoms.items()], columns=["state", "geometry"]
-    )
+    return line_gb, sorted(state_opts), sorted(varname_opts)
 
 
 @st.cache_data
 def load_map_geojson() -> dict:
-    state_geoms = load_state_geometries(SHAPEFILE_PATH)
+    # state_geoms = load_state_geometries(SHAPEFILE_PATH)
+    state_geoms = load_state_geometries_geojson(GEOJSON_PATH)
     return {
         "type": "FeatureCollection",
         "features": [
@@ -57,13 +66,31 @@ def load_map_geojson() -> dict:
 
 
 @st.cache_data
+def load_map_geom() -> dict:
+    with open(GEOJSON_PATH, "r") as f:
+        geojson = json.load(f)
+
+    for feature in geojson["features"]:
+        feature["id"] = feature["properties"]["ST_NM"].lower()
+    return geojson
+
+
+@st.cache_data
 def load_map_gb(excel_file: str):
     data = load_raw_data(excel_file)
     cleaned_data = clean_data(data)
-    return cleaned_data.groupby(["variable", "year", "cadres"])
+    map_gb = cleaned_data.groupby(["variable", "year", "cadres"])
+    year_opts, varname_opts, cadre_opts = set(), set(), set()
+    for v, y, c in map_gb.groups.keys():
+        year_opts.add(y)
+        varname_opts.add(v)
+        cadre_opts.add(c)
+    return map_gb, sorted(year_opts), sorted(varname_opts), sorted(cadre_opts)
 
 
 def display_line_chart(line_gb, chosen_state, chosen_var):
+    print_with_timestamp(f"Displaying line chart for {chosen_state}, {chosen_var}")
+
     series = line_gb.get_group((chosen_state, chosen_var))
     intersection = determine_cadre_intersection(
         chosen_var, series, c.CADRES_OF_INTEREST
@@ -76,9 +103,7 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         deficit_col = "deficit"
         df = series.rename(deficit_col).reset_index().copy()
         st.dataframe(df, height=300)
-
         st.text(f"Showing deficit for {len(intersection)} cadres")
-
         df = df[df["cadres"].isin(intersection)]
 
         # Use label mapping if available
@@ -155,12 +180,46 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         )
 
         st.altair_chart(chart, use_container_width=True)
+        print_with_timestamp(f"Displayed line chart for {chosen_state}, {chosen_var}")
 
 
-def display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, geojson):
+def display_map_chart(
+    map_gb,
+    chosen_var: str,
+    chosen_year: str,
+    chosen_cadre: str,
+    geojson: dict,
+):
     series = map_gb.get_group((chosen_var, chosen_year, chosen_cadre)).rename("deficit")
     df = series.reset_index().copy()
+    deficit_dict = df.set_index("states")["deficit"].to_dict()
+
+    print_with_timestamp(
+        f"Displaying map chart for {chosen_var}, {chosen_year}, {chosen_cadre}"
+    )
+
+    new_features = []
+    for feature in geojson["features"]:
+        new_features.append(
+            {
+                "type": "Feature",
+                "geometry": feature["geometry"],
+                "properties": {
+                    **feature["properties"],
+                    "deficit": deficit_dict.get(feature["id"]),
+                },
+            }
+        )
+
+    geojson = {"type": "FeatureCollection", "features": new_features}
+
     # st.dataframe(df, height=300)
+    colormap = cm.LinearColormap(
+        vmin=-1,
+        vmax=1,
+        colors=["#91cf60", "#ffffbf", "#fc8d59"],
+        caption="Deficit Level",
+    )
 
     m = folium.Map(
         location=[23, 81],
@@ -169,42 +228,59 @@ def display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, geojson):
         scroll_wheel_zoom=False,
         dragging=False,
         extent=[-180, -90, 180, 90],
+        tiles=None,
+        no_touch=True,
+        png_enabled=True,
     )
 
-    folium.Choropleth(
-        geo_data=geojson,
-        name="choropleth",
-        data=df,
-        columns=["states", "deficit"],
-        key_on="feature.id",
-        fill_color="RdYlGn",
-        fill_opacity=0.7,
-        line_opacity=0.2,
-        legend_name="Deficit",
-        highlight=True,
+    tooltip = folium.GeoJsonTooltip(
+        fields=["state", "deficit"],
+        aliases=["State", "Deficit"],
+        localize=True,
+        sticky=False,
+        labels=True,
+        max_width=800,
+    )
+
+    folium.GeoJson(
+        geojson,
+        style_function=lambda x: {
+            "fillColor": (
+                colormap(x["properties"]["deficit"])
+                if x["properties"]["deficit"] is not None
+                else "white"
+            ),
+            "fillOpacity": 0.9,
+            "color": "black",
+            "weight": 0.2,
+        },
+        name="geojson",
+        tooltip=tooltip,
+        highlight=False,
     ).add_to(m)
 
-    folium.LayerControl().add_to(m)
+    # folium.LayerControl().add_to(m)
+    colormap.add_to(m)
 
-    st_folium(m, width=800, height=800)
+    st_folium(m, width=None, height=800, key="folium_map")
+    print_with_timestamp(
+        f"Displayed map chart for {chosen_var}, {chosen_year}, {chosen_cadre}"
+    )
 
 
 tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
 
 with tab_lines:
     st.title("Deficit over time")
-    line_gb = load_line_gb(EXCEL_FILE)
-
-    state_opts, varname_opts = set(), set()
-    for s, v in line_gb.groups.keys():
-        state_opts.add(s)
-        varname_opts.add(v)
+    line_gb, line_state_opts, line_varname_opts = load_line_gb(EXCEL_FILE)
 
     sidebar_col, _, main_col = st.columns([4, 1, 12])
     with sidebar_col:
-        chosen_state = st.selectbox("State", state_opts)
-        chosen_var = st.selectbox("Variable", varname_opts)
-        st.text(f"Showing {len(state_opts)} states, {len(varname_opts)} variables")
+        chosen_state = st.selectbox("State", line_state_opts)
+        chosen_var = st.selectbox("Variable", line_varname_opts)
+        st.text(
+            f"Showing {len(line_state_opts)} states, {len(line_varname_opts)} variables"
+        )
 
     with main_col:
         display_line_chart(line_gb, chosen_state, chosen_var)
@@ -212,23 +288,17 @@ with tab_lines:
 
 with tab_maps:
     st.title("Deficit over geography")
-    map_gb = load_map_gb(EXCEL_FILE)
+    map_gb, map_year_opts, map_varname_opts, map_cadre_opts = load_map_gb(EXCEL_FILE)
     geojson = load_map_geojson()
 
     sidebar_col, _, main_col = st.columns([4, 1, 12])
 
-    year_opts, varname_opts, cadre_opts = set(), set(), set()
-    for v, y, c in map_gb.groups.keys():
-        year_opts.add(y)
-        varname_opts.add(v)
-        cadre_opts.add(c)
-
     with sidebar_col:
-        chosen_var = st.selectbox("Map Variable", varname_opts)
-        chosen_year = st.selectbox("Map Year", year_opts)
-        chosen_cadre = st.selectbox("Map Cadre", cadre_opts)
+        chosen_var = st.selectbox("Map Variable", map_varname_opts)
+        chosen_year = st.selectbox("Map Year", map_year_opts)
+        chosen_cadre = st.selectbox("Map Cadre", map_cadre_opts)
         st.text(
-            f"Showing {len(year_opts)} years, {len(varname_opts)} variables, {len(cadre_opts)} cadres"
+            f"Showing {len(map_year_opts)} years, {len(map_varname_opts)} variables, {len(map_cadre_opts)} cadres"
         )
 
     with main_col:
