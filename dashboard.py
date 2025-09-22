@@ -183,13 +183,11 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         print_with_timestamp(f"Displayed line chart for {chosen_state}, {chosen_var}")
 
 
-def display_map_chart(
-    map_gb,
-    chosen_var: str,
-    chosen_year: str,
-    chosen_cadre: str,
-    geojson: dict,
-):
+@st.cache_data(max_entries=300)
+def load_map_data(chosen_var, chosen_year, chosen_cadre):
+    geojson = load_map_geojson()
+    map_gb, _, _, _ = load_map_gb(EXCEL_FILE)
+
     series = map_gb.get_group((chosen_var, chosen_year, chosen_cadre)).rename("deficit")
     df = series.reset_index().copy()
     deficit_dict = df.set_index("states")["deficit"].to_dict()
@@ -212,6 +210,15 @@ def display_map_chart(
         )
 
     geojson = {"type": "FeatureCollection", "features": new_features}
+    return geojson
+
+
+def display_map_chart(
+    chosen_var: str,
+    chosen_year: str,
+    chosen_cadre: str,
+):
+    geojson = load_map_data(chosen_var, chosen_year, chosen_cadre)
 
     # st.dataframe(df, height=300)
     colormap = cm.LinearColormap(
@@ -289,17 +296,43 @@ with tab_lines:
 with tab_maps:
     st.title("Deficit over geography")
     map_gb, map_year_opts, map_varname_opts, map_cadre_opts = load_map_gb(EXCEL_FILE)
-    geojson = load_map_geojson()
 
     sidebar_col, _, main_col = st.columns([4, 1, 12])
 
     with sidebar_col:
         chosen_var = st.selectbox("Map Variable", map_varname_opts)
-        chosen_year = st.selectbox("Map Year", map_year_opts)
         chosen_cadre = st.selectbox("Map Cadre", map_cadre_opts)
+        chosen_year = st.selectbox("Map Year", map_year_opts)
         st.text(
             f"Showing {len(map_year_opts)} years, {len(map_varname_opts)} variables, {len(map_cadre_opts)} cadres"
         )
 
     with main_col:
-        display_map_chart(map_gb, chosen_var, chosen_year, chosen_cadre, geojson)
+        if (chosen_var, chosen_year, chosen_cadre) in map_gb.groups:
+            display_map_chart(chosen_var, chosen_year, chosen_cadre)
+        else:
+
+            groups = list(map_gb.groups.keys())
+
+            available_cadre_years = []
+            for group in groups:
+                if group[0] == chosen_var:
+                    available_cadre_years.append(group[1:])
+
+            available_cadre_years_markdown = "\n".join(
+                [f"- {', '.join(map(str, year))}" for year in available_cadre_years]
+            )
+
+            st.markdown(
+                f"""
+# No deficit data available for selected parameters
+
+Selected parameters:
+- **Variable:** {chosen_var}
+- **Cadre:** {chosen_cadre}
+- **Year:** {chosen_year}
+
+## Available Combinations for {chosen_var}
+{available_cadre_years_markdown}
+"""
+            )
