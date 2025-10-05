@@ -11,6 +11,11 @@ import branca.colormap as cm
 import constants as c
 from utils import *
 
+
+import geopandas as gpd
+import altair as alt
+
+
 st.set_page_config(layout="wide")
 
 EXCEL_FILE = "Documents/14_07_22_VW_AAAQ_mastersheet__26_NOV_23.xlsx"
@@ -79,13 +84,23 @@ def load_map_geom() -> dict:
 def load_map_gb(excel_file: str):
     data = load_raw_data(excel_file)
     cleaned_data = clean_data(data)
-    map_gb = cleaned_data.groupby(["variable", "year", "cadres"])
-    year_opts, varname_opts, cadre_opts = set(), set(), set()
-    for v, y, c in map_gb.groups.keys():
-        year_opts.add(y)
-        varname_opts.add(v)
-        cadre_opts.add(c)
-    return map_gb, sorted(year_opts), sorted(varname_opts), sorted(cadre_opts)
+    map_gb = cleaned_data.groupby(["variable", "cadres", "year"])
+
+    index = {
+        group: {v: {} for v in variables}
+        for group, variables in c.VARIABLE_GROUPS.items()
+    }
+
+    variables = {v: index[group][v] for group in index for v in index[group]}
+    # year_opts, varname_opts, cadre_opts = set(), set(), set()
+
+    for variable, cadre, year in map_gb.groups.keys():
+        if cadre in variables[variable]:
+            variables[variable][cadre].append(year)
+        else:
+            variables[variable][cadre] = [year]
+
+    return map_gb, index
 
 
 def display_line_chart(line_gb, chosen_state, chosen_var):
@@ -186,9 +201,9 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
 @st.cache_data(max_entries=300)
 def load_map_data(chosen_var, chosen_year, chosen_cadre):
     geojson = load_map_geojson()
-    map_gb, _, _, _ = load_map_gb(EXCEL_FILE)
+    map_gb, _ = load_map_gb(EXCEL_FILE)
 
-    series = map_gb.get_group((chosen_var, chosen_year, chosen_cadre)).rename("deficit")
+    series = map_gb.get_group((chosen_var, chosen_cadre, chosen_year)).rename("deficit")
     df = series.reset_index().copy()
     deficit_dict = df.set_index("states")["deficit"].to_dict()
 
@@ -215,8 +230,8 @@ def load_map_data(chosen_var, chosen_year, chosen_cadre):
 
 def display_map_chart(
     chosen_var: str,
-    chosen_year: str,
     chosen_cadre: str,
+    chosen_year: str,
 ):
     geojson = load_map_data(chosen_var, chosen_year, chosen_cadre)
 
@@ -275,6 +290,29 @@ def display_map_chart(
     )
 
 
+def select_map_parameters(index: dict):
+    chosen_variable, chosen_cadre, chosen_year = None, None, None
+    chosen_group = st.segmented_control("Choose Group of Variables:", index.keys())
+
+    if chosen_group is not None:
+        choice_dict = index[chosen_group]
+        chosen_variable = st.selectbox(
+            "Map Variable", sorted(choice_dict.keys()), index=None
+        )
+
+        if chosen_variable is not None:
+            choice_dict = choice_dict[chosen_variable]
+            chosen_cadre = st.selectbox(
+                "Map Cadre", sorted(choice_dict.keys()), index=None
+            )
+
+            if chosen_cadre is not None:
+                choices = choice_dict[chosen_cadre]
+                chosen_year = st.selectbox("Map Year", sorted(choices), index=None)
+
+    return chosen_variable, chosen_cadre, chosen_year
+
+
 tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
 
 with tab_lines:
@@ -295,44 +333,25 @@ with tab_lines:
 
 with tab_maps:
     st.title("Deficit over geography")
-    map_gb, map_year_opts, map_varname_opts, map_cadre_opts = load_map_gb(EXCEL_FILE)
+    map_gb, index = load_map_gb(EXCEL_FILE)
 
     sidebar_col, _, main_col = st.columns([4, 1, 12])
 
     with sidebar_col:
-        chosen_var = st.selectbox("Map Variable", map_varname_opts)
-        chosen_cadre = st.selectbox("Map Cadre", map_cadre_opts)
-        chosen_year = st.selectbox("Map Year", map_year_opts)
-        st.text(
-            f"Showing {len(map_year_opts)} years, {len(map_varname_opts)} variables, {len(map_cadre_opts)} cadres"
-        )
+        chosen_variable, chosen_cadre, chosen_year = select_map_parameters(index)
 
     with main_col:
-        if (chosen_var, chosen_year, chosen_cadre) in map_gb.groups:
-            display_map_chart(chosen_var, chosen_year, chosen_cadre)
+        if chosen_variable is None or chosen_cadre is None or chosen_year is None:
+            st.markdown("## Please select required parameters using the sidebar")
+        elif (chosen_variable, chosen_cadre, chosen_year) in map_gb.groups:
+            display_map_chart(chosen_variable, chosen_cadre, chosen_year)
         else:
-
-            groups = list(map_gb.groups.keys())
-
-            available_cadre_years = []
-            for group in groups:
-                if group[0] == chosen_var:
-                    available_cadre_years.append(group[1:])
-
-            available_cadre_years_markdown = "\n".join(
-                [f"- {', '.join(map(str, year))}" for year in available_cadre_years]
-            )
-
             st.markdown(
-                f"""
-# No deficit data available for selected parameters
+                """
+## Something went wrong!
 
-Selected parameters:
-- **Variable:** {chosen_var}
-- **Cadre:** {chosen_cadre}
-- **Year:** {chosen_year}
+This is probably a bug. Kindly report [here](https://github.com/asarforindia/aaaq-hrh-deficit/issues) along with screenshot of the sidebar.
 
-## Available Combinations for {chosen_var}
-{available_cadre_years_markdown}
+Thank you!
 """
             )

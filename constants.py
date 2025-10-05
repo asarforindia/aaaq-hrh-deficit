@@ -35,6 +35,8 @@ VARNAME_MAPPING = {
     "ApD_sex_mix": "Acceptability Deficit (ApD) sex-mix",
     # Accessibility Deficit (AsD)
     "AsD": "Accessibility Deficit (AsD)",
+    # Quality Deficit (QD)
+    "QD": "Quality deficit (QD)",
     # Availability Deficit (AvD)
     "AvD_Bhore": "Availability Deficit (AvD) as per Bhore norms",
     "AvD_HLEG": "Availability Deficit (AvD) as per HLEG norms",
@@ -43,9 +45,6 @@ VARNAME_MAPPING = {
     "AvD_IPHS": "Availability Deficit (AvD) as per IPHS norms",
     "AvD_MDG": "Availability Deficit (AvD) as per MDG norms",
     "AvD_SDG": "Availability Deficit (AvD) as per SDG norms",
-    # Quality Deficit (QD)
-    "QD": "Quality deficit (QD)",
-    # Availability Deficit (AvD) by threshold
     "AvD_male_Bhore": "Availability Deficit (AvD) for male population\nas per Bhore norms",
     "AvD_male_HLEG": "Availability Deficit (AvD) for male population\nas per HLEG norms",
     "AvD_male_HME_UHC80": "Availability Deficit (AvD) for male population\nas per HME UHC80 norms",
@@ -69,13 +68,21 @@ VARNAME_MAPPING = {
 }
 
 VARIABLE_GROUPS = {
-    "Deficit Variables": ["ApD_sex_mix", "AsD", "QD"],
-    "Threshold Variables": [
+    "ApD": [
         "ApD_cadre_mix_Bhore",
         "ApD_cadre_mix_HLEG",
         "ApD_cadre_mix_IHME_UHC80",
         "ApD_cadre_mix_IHME_UHC90",
         "ApD_cadre_mix_IPHS",
+        "ApD_sex_mix",
+    ],
+    "AsD": [
+        "AsD",
+    ],
+    "QD": [
+        "QD",
+    ],
+    "AvD": [
         "AvD_Bhore",
         "AvD_HLEG",
         "AvD_IHME_UHC80",
@@ -91,6 +98,8 @@ VARIABLE_GROUPS = {
         "AvD_male_IPHS",
         "AvD_male_MDG",
         "AvD_male_SDG",
+        "AvD_male_UHC_80",
+        "AvD_male_UHC_90",
         "AvD_urban_Bhore",
         "AvD_urban_HLEG",
         "AvD_urban_HME_UHC80",
