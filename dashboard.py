@@ -1,18 +1,15 @@
 import streamlit as st
 import altair as alt
-import folium
-from streamlit_folium import st_folium
 import shapely
 import numpy as np
 import json
 from datetime import datetime
-import branca.colormap as cm
 
 import constants as c
 from utils import *
 
 
-import geopandas as gpd
+import plotly.graph_objects as go
 import altair as alt
 
 
@@ -199,94 +196,172 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
 
 
 @st.cache_data(max_entries=300)
-def load_map_data(chosen_var, chosen_year, chosen_cadre):
-    geojson = load_map_geojson()
+def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
+    geojson_template = load_map_geojson()
     map_gb, _ = load_map_gb(EXCEL_FILE)
 
-    series = map_gb.get_group((chosen_var, chosen_cadre, chosen_year)).rename("deficit")
-    df = series.reset_index().copy()
-    deficit_dict = df.set_index("states")["deficit"].to_dict()
+    # Get all state IDs from geojson
+    all_state_ids = [feature["id"] for feature in geojson_template["features"]]
+    frames_data = {}
+
+    for year in chosen_years:
+        series = map_gb.get_group((chosen_var, chosen_cadre, year)).rename("deficit")
+        df = series.reset_index().copy()
+        deficit_dict = df.set_index("states")["deficit"].to_dict()
+
+        # Separate states with data and without data
+        locations_with_data = []
+        deficits_with_data = []
+        state_names_with_data = []
+        locations_without_data = []
+        state_names_without_data = []
+
+        for state_id in all_state_ids:
+            if state_id in deficit_dict:
+                locations_with_data.append(state_id)
+                deficits_with_data.append(deficit_dict[state_id])
+                state_names_with_data.append(state_id.capitalize())
+            else:
+                locations_without_data.append(state_id)
+                state_names_without_data.append(state_id.capitalize())
+
+        frames_data[year] = {
+            "locations_with_data": locations_with_data,
+            "deficits": deficits_with_data,
+            "state_names_with_data": state_names_with_data,
+            "locations_without_data": locations_without_data,
+            "state_names_without_data": state_names_without_data,
+        }
 
     print_with_timestamp(
-        f"Displaying map chart for {chosen_var}, {chosen_year}, {chosen_cadre}"
+        f"Loaded map data for {chosen_var}, {chosen_years}, {chosen_cadre}"
     )
 
-    new_features = []
-    for feature in geojson["features"]:
-        new_features.append(
-            {
-                "type": "Feature",
-                "geometry": feature["geometry"],
-                "properties": {
-                    **feature["properties"],
-                    "deficit": deficit_dict.get(feature["id"]),
-                },
-            }
-        )
-
-    geojson = {"type": "FeatureCollection", "features": new_features}
-    return geojson
+    return geojson_template, frames_data
 
 
 def display_map_chart(
-    chosen_var: str,
+    chosen_variable: str,
     chosen_cadre: str,
-    chosen_year: str,
+    chosen_years: list[str],
 ):
-    geojson = load_map_data(chosen_var, chosen_year, chosen_cadre)
-
-    # st.dataframe(df, height=300)
-    colormap = cm.LinearColormap(
-        vmin=-1,
-        vmax=1,
-        colors=["#91cf60", "#ffffbf", "#fc8d59"],
-        caption="Deficit Level",
+    geojson_template, frames_data = load_map_data_multiyear(
+        chosen_variable, tuple(chosen_years), chosen_cadre
     )
 
-    m = folium.Map(
-        location=[23, 81],
-        zoom_start=5,
-        zoom_control=False,
-        scroll_wheel_zoom=False,
-        dragging=False,
-        extent=[-180, -90, 180, 90],
-        tiles=None,
-        no_touch=True,
-        png_enabled=True,
+    # Create initial frame (first year)
+    first_year = chosen_years[0]
+    initial_data = frames_data[first_year]
+
+    fig = go.Figure()
+
+    # Layer 1: Gray background for missing data
+    fig.add_trace(
+        go.Choroplethmap(
+            geojson=geojson_template,
+            locations=initial_data["locations_without_data"],
+            z=[0] * len(initial_data["locations_without_data"]),
+            featureidkey="id",
+            colorscale=[[0, "#d3d3d3"], [1, "#d3d3d3"]],
+            showscale=False,
+            marker_line_width=0.2,
+            marker_line_color="black",
+            hovertemplate="<b>%{customdata}</b><br>No data<extra></extra>",
+            customdata=initial_data["state_names_without_data"],
+        )
     )
 
-    tooltip = folium.GeoJsonTooltip(
-        fields=["state", "deficit"],
-        aliases=["State", "Deficit"],
-        localize=True,
-        sticky=False,
-        labels=True,
-        max_width=800,
+    # Layer 2: Actual data with color scale
+    fig.add_trace(
+        go.Choroplethmap(
+            geojson=geojson_template,
+            locations=initial_data["locations_with_data"],
+            z=initial_data["deficits"],
+            featureidkey="id",
+            colorscale=[[0, "#91cf60"], [0.5, "#ffffbf"], [1, "#fc8d59"]],
+            zmin=-1,
+            zmax=1,
+            marker_line_width=0.2,
+            marker_line_color="black",
+            colorbar_title="Deficit Level",
+            hovertemplate="<b>%{customdata}</b><br>Deficit: %{z:.2f}<extra></extra>",
+            customdata=initial_data["state_names_with_data"],
+        )
     )
 
-    folium.GeoJson(
-        geojson,
-        style_function=lambda x: {
-            "fillColor": (
-                colormap(x["properties"]["deficit"])
-                if x["properties"]["deficit"] is not None
-                else "white"
-            ),
-            "fillOpacity": 0.9,
-            "color": "black",
-            "weight": 0.2,
-        },
-        name="geojson",
-        tooltip=tooltip,
-        highlight=False,
-    ).add_to(m)
+    # Create frames for slider
+    frames = []
+    for year in chosen_years:
+        year_data = frames_data[year]
+        frames.append(
+            go.Frame(
+                data=[
+                    go.Choroplethmap(
+                        geojson=geojson_template,
+                        locations=year_data["locations_without_data"],
+                        z=[0] * len(year_data["locations_without_data"]),
+                        featureidkey="id",
+                        colorscale=[[0, "#d3d3d3"], [1, "#d3d3d3"]],
+                        showscale=False,
+                        marker_line_width=0.2,
+                        marker_line_color="black",
+                        hovertemplate="<b>%{customdata}</b><br>No data<extra></extra>",
+                        customdata=year_data["state_names_without_data"],
+                    ),
+                    go.Choroplethmap(
+                        geojson=geojson_template,
+                        locations=year_data["locations_with_data"],
+                        z=year_data["deficits"],
+                        featureidkey="id",
+                        colorscale=[[0, "#91cf60"], [0.5, "#ffffbf"], [1, "#fc8d59"]],
+                        zmin=-1,
+                        zmax=1,
+                        marker_line_width=0.2,
+                        marker_line_color="black",
+                        colorbar_title="Deficit Level",
+                        hovertemplate="<b>%{customdata}</b><br>Deficit: %{z:.2f}<extra></extra>",
+                        customdata=year_data["state_names_with_data"],
+                    ),
+                ],
+                name=year,
+            )
+        )
 
-    # folium.LayerControl().add_to(m)
-    colormap.add_to(m)
+    title_varname = c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)
+    title_cadre = c.CADRE_LABEL_MAPPING.get(chosen_cadre, chosen_cadre)
+    fig.frames = frames
+    fig.update_layout(
+        map=dict(
+            style="white-bg",
+            center=dict(lat=22.5, lon=82),
+            zoom=3.6,
+        ),
+        height=800,
+        title=f"{title_varname} in {title_cadre}",
+        sliders=[
+            {
+                "active": 0,
+                "steps": [
+                    {
+                        "args": [
+                            [year],
+                            {
+                                "frame": {"duration": 0, "redraw": True},
+                                "mode": "immediate",
+                            },
+                        ],
+                        "method": "animate",
+                        "label": year,
+                    }
+                    for year in chosen_years
+                ],
+            }
+        ],
+    )
 
-    st_folium(m, width=None, height=800, key="folium_map")
+    st.plotly_chart(fig, use_container_width=True)
     print_with_timestamp(
-        f"Displayed map chart for {chosen_var}, {chosen_year}, {chosen_cadre}"
+        f"Displayed map chart for {chosen_variable}, {chosen_years}, {chosen_cadre}"
     )
 
 
@@ -307,8 +382,7 @@ def select_map_parameters(index: dict):
             )
 
             if chosen_cadre is not None:
-                choices = choice_dict[chosen_cadre]
-                chosen_year = st.selectbox("Map Year", sorted(choices), index=None)
+                chosen_year = choice_dict[chosen_cadre]
 
     return chosen_variable, chosen_cadre, chosen_year
 
@@ -343,15 +417,5 @@ with tab_maps:
     with main_col:
         if chosen_variable is None or chosen_cadre is None or chosen_year is None:
             st.markdown("## Please select required parameters using the sidebar")
-        elif (chosen_variable, chosen_cadre, chosen_year) in map_gb.groups:
-            display_map_chart(chosen_variable, chosen_cadre, chosen_year)
         else:
-            st.markdown(
-                """
-## Something went wrong!
-
-This is probably a bug. Kindly report [here](https://github.com/asarforindia/aaaq-hrh-deficit/issues) along with screenshot of the sidebar.
-
-Thank you!
-"""
-            )
+            display_map_chart(chosen_variable, chosen_cadre, chosen_year)
