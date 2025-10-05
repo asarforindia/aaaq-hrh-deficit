@@ -38,14 +38,19 @@ cadre_colors = {
 def load_line_gb(excel_file: str):
     data = load_raw_data(excel_file)
     cleaned_data = clean_data(data)
-    line_gb = cleaned_data.groupby(["states", "variable"])
+    line_gb = cleaned_data.groupby(["variable", "states"])
 
-    state_opts, varname_opts = set(), set()
-    for s, v in line_gb.groups.keys():
-        state_opts.add(s)
-        varname_opts.add(v)
+    index = {
+        group: {v: [] for v in variables}
+        for group, variables in c.VARIABLE_GROUPS.items()
+    }
 
-    return line_gb, sorted(state_opts), sorted(varname_opts)
+    variables = {v: index[group][v] for group in index for v in index[group]}
+
+    for variable, state in line_gb.groups.keys():
+        variables[variable].append(state)
+
+    return line_gb, index
 
 
 @st.cache_data
@@ -88,7 +93,6 @@ def load_map_gb(excel_file: str):
     }
 
     variables = {v: index[group][v] for group in index for v in index[group]}
-    # year_opts, varname_opts, cadre_opts = set(), set(), set()
 
     for variable, cadre, year in map_gb.groups.keys():
         if cadre in variables[variable]:
@@ -99,12 +103,12 @@ def load_map_gb(excel_file: str):
     return map_gb, index
 
 
-def display_line_chart(line_gb, chosen_state, chosen_var):
-    print_with_timestamp(f"Displaying line chart for {chosen_state}, {chosen_var}")
+def display_line_chart(line_gb, chosen_state, chosen_variable):
+    print_with_timestamp(f"Displaying line chart for {chosen_state}, {chosen_variable}")
 
-    series = line_gb.get_group((chosen_state, chosen_var))
+    series = line_gb.get_group((chosen_variable, chosen_state))
     intersection = determine_cadre_intersection(
-        chosen_var, series, c.CADRES_OF_INTEREST
+        chosen_variable, series, c.CADRES_OF_INTEREST
     )
 
     if not intersection:
@@ -114,25 +118,15 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         deficit_col = "deficit"
         df = series.rename(deficit_col).reset_index().copy()
         df_origin = df.copy()
-        st.text(f"Showing deficit for {len(intersection)} cadres")
+
         df = df[df["cadres"].isin(intersection)]
-
-        # Use label mapping if available
-        if hasattr(c, "CADRE_LABEL_MAPPING"):
-            df["Cadre Label"] = df["cadres"].map(
-                lambda x: c.CADRE_LABEL_MAPPING.get(x, x)
-            )
-        else:
-            df["Cadre Label"] = df["cadres"]
-
-        # Clip deficit column at -1, 1 for readable charts
+        df["Cadre Label"] = df["cadres"].map(lambda x: c.CADRE_LABEL_MAPPING.get(x, x))
         df[deficit_col] = np.clip(df[deficit_col], a_min=-1, a_max=1)
-        # Set y-axis limits with a margin of 0.125
+
         y_min_margin = df[deficit_col].min() - 1
         y_max_margin = df[deficit_col].max() + 1
-        # Add a column to indicate if year > PROJ_YEAR
         df["is_proj"] = df["year"].astype(int) >= c.PROJECTION_YEAR
-        # Use the new altair selection API for interactive legend (show/hide by clicking legend)
+
         cadre_selection = alt.selection_point(fields=["Cadre Label"], bind="legend")
 
         # Create the line chart
@@ -184,7 +178,7 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
             .properties(
                 width=600,
                 height=400,
-                title=f"{c.VARNAME_MAPPING.get(chosen_var, chosen_var)} in {chosen_state}",
+                title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state}",
             )
             .add_params(cadre_selection)
             .interactive()
@@ -192,11 +186,13 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
 
         st.altair_chart(chart, use_container_width=True)
         st.dataframe(df_origin, height=300)
-        print_with_timestamp(f"Displayed line chart for {chosen_state}, {chosen_var}")
+        print_with_timestamp(
+            f"Displayed line chart for {chosen_state}, {chosen_variable}"
+        )
 
 
 @st.cache_data(max_entries=300)
-def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
+def load_map_data_multiyear(chosen_variable, chosen_years, chosen_cadre):
     geojson_template = load_map_geojson()
     map_gb, _ = load_map_gb(EXCEL_FILE)
 
@@ -205,7 +201,9 @@ def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
     frames_data = {}
 
     for year in chosen_years:
-        series = map_gb.get_group((chosen_var, chosen_cadre, year)).rename("deficit")
+        series = map_gb.get_group((chosen_variable, chosen_cadre, year)).rename(
+            "deficit"
+        )
         df = series.reset_index().copy()
         deficit_dict = df.set_index("states")["deficit"].to_dict()
 
@@ -234,7 +232,7 @@ def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
         }
 
     print_with_timestamp(
-        f"Loaded map data for {chosen_var}, {chosen_years}, {chosen_cadre}"
+        f"Loaded map data for {chosen_variable}, {chosen_years}, {chosen_cadre}"
     )
 
     return frames_data
@@ -406,6 +404,34 @@ def select_map_parameters(index: dict):
     return chosen_variable, chosen_cadre, chosen_year
 
 
+def select_line_parameters(index):
+    chosen_state, chosen_variable = None, None
+
+    chosen_group = st.radio(
+        "Choose Group of Variables:",
+        c.VARIABLE_GROUP_LABELS.keys(),
+        index=0,
+        format_func=lambda x: c.VARIABLE_GROUP_LABELS[x],
+    )
+
+    if chosen_group is not None:
+        choice_dict = index[chosen_group]
+        chosen_variable = st.selectbox(
+            "Chart Variable", sorted(choice_dict.keys()), index=0
+        )
+
+        if chosen_variable is not None:
+            state_choices = choice_dict[chosen_variable]
+            chosen_state = st.selectbox(
+                "Chart State",
+                sorted(state_choices),
+                format_func=lambda x: x.title(),
+                index=0,
+            )
+
+    return chosen_state, chosen_variable
+
+
 # tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
 
 with st.sidebar:
@@ -417,17 +443,13 @@ with st.sidebar:
 
 if tab_choice == "Temporal":
     st.subheader("Deficit over time")
-    line_gb, line_state_opts, line_varname_opts = load_line_gb(EXCEL_FILE)
+    line_gb, index = load_line_gb(EXCEL_FILE)
 
     # sidebar_col, _, main_col = st.columns([4, 1, 12])
     with st.sidebar:
-        chosen_state = st.selectbox("State", line_state_opts)
-        chosen_var = st.selectbox("Variable", line_varname_opts)
-        st.text(
-            f"Showing {len(line_state_opts)} states, {len(line_varname_opts)} variables"
-        )
+        chosen_state, chosen_variable = select_line_parameters(index)
 
-    display_line_chart(line_gb, chosen_state, chosen_var)
+    display_line_chart(line_gb, chosen_state, chosen_variable)
 
 elif tab_choice == "Spatial":
     st.subheader("Deficit over geography")
