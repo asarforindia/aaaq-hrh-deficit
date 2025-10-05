@@ -1,3 +1,4 @@
+from turtle import width
 import streamlit as st
 import altair as alt
 import shapely
@@ -128,6 +129,7 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
         df["is_proj"] = df["year"].astype(int) >= c.PROJECTION_YEAR
 
         cadre_selection = alt.selection_point(fields=["Cadre Label"], bind="legend")
+        year_selection = alt.selection_point(fields=["year"], empty=False)
 
         # Create the line chart
         line_chart = (
@@ -140,7 +142,11 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
                     title="Deficit",
                     scale=alt.Scale(domain=[y_min_margin, y_max_margin]),
                 ),
-                color=alt.Color("Cadre Label:N", title="Cadre"),
+                color=alt.Color(
+                    "Cadre Label:N",
+                    title="Cadre",
+                    legend=alt.Legend(orient="bottom", columns=3),
+                ),
                 opacity=alt.condition(cadre_selection, alt.value(0.75), alt.value(0.1)),
                 tooltip=["year", "Cadre Label", deficit_col],
             )
@@ -162,9 +168,14 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
                         title=f"Is projection",
                         symbolType="stroke",
                         symbolFillColor="gray",
+                        orient="bottom",
                     ),
                 ),
-                tooltip=["year", "Cadre Label", deficit_col],
+                tooltip=[
+                    "year",
+                    "Cadre Label",
+                    alt.Tooltip(deficit_col, format=".3f"),
+                ],
             )
         )
 
@@ -178,13 +189,26 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
             .properties(
                 width=600,
                 height=400,
-                title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state}",
+                title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state.title()}",
             )
-            .add_params(cadre_selection)
+            .add_params(cadre_selection, year_selection)
             .interactive()
         )
 
-        st.altair_chart(chart, use_container_width=True)
+        detail_chart = (
+            alt.Chart(df)
+            .mark_bar()
+            .encode(
+                x=alt.X("Cadre Label:N", title="Cadre", sort="-x"),
+                y=alt.Y(deficit_col, title="Deficit"),
+                color=alt.Color("Cadre Label:N", legend=None),
+                tooltip=["Cadre Label", deficit_col, "year"],
+            )
+            .transform_filter(year_selection)
+            .properties(title="Selected Year Details", width=300)
+        )
+
+        st.altair_chart(chart | detail_chart, use_container_width=True)
         st.dataframe(df_origin, height=300)
         print_with_timestamp(
             f"Displayed line chart for {chosen_state}, {chosen_variable}"
