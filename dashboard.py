@@ -14,6 +14,7 @@ import altair as alt
 
 
 st.set_page_config(layout="wide")
+st.title("AAAQ HRH Deficit Explorer")
 
 EXCEL_FILE = "Documents/14_07_22_VW_AAAQ_mastersheet__26_NOV_23.xlsx"
 SHAPEFILE_PATH = "Documents/maps-master/States/Admin2"
@@ -31,8 +32,6 @@ cadre_colors = {
         c.CADRES_OF_INTEREST + ("nursing cadres", "supporting cadres")
     )
 }
-
-st.title("AAAQ HRH Deficit Explorer")
 
 
 @st.cache_data
@@ -114,7 +113,7 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         # Prepare the DataFrame for plotting
         deficit_col = "deficit"
         df = series.rename(deficit_col).reset_index().copy()
-        st.dataframe(df, height=300)
+        df_origin = df.copy()
         st.text(f"Showing deficit for {len(intersection)} cadres")
         df = df[df["cadres"].isin(intersection)]
 
@@ -192,6 +191,7 @@ def display_line_chart(line_gb, chosen_state, chosen_var):
         )
 
         st.altair_chart(chart, use_container_width=True)
+        st.dataframe(df_origin, height=300)
         print_with_timestamp(f"Displayed line chart for {chosen_state}, {chosen_var}")
 
 
@@ -220,10 +220,10 @@ def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
             if state_id in deficit_dict:
                 locations_with_data.append(state_id)
                 deficits_with_data.append(deficit_dict[state_id])
-                state_names_with_data.append(state_id.capitalize())
+                state_names_with_data.append(state_id.title())
             else:
                 locations_without_data.append(state_id)
-                state_names_without_data.append(state_id.capitalize())
+                state_names_without_data.append(state_id.title())
 
         frames_data[year] = {
             "locations_with_data": locations_with_data,
@@ -237,7 +237,7 @@ def load_map_data_multiyear(chosen_var, chosen_years, chosen_cadre):
         f"Loaded map data for {chosen_var}, {chosen_years}, {chosen_cadre}"
     )
 
-    return geojson_template, frames_data
+    return frames_data
 
 
 def display_map_chart(
@@ -245,7 +245,8 @@ def display_map_chart(
     chosen_cadre: str,
     chosen_years: list[str],
 ):
-    geojson_template, frames_data = load_map_data_multiyear(
+    geojson_template = load_map_geojson()
+    frames_data = load_map_data_multiyear(
         chosen_variable, tuple(chosen_years), chosen_cadre
     )
 
@@ -359,7 +360,20 @@ def display_map_chart(
         ],
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+
+    frame = pd.DataFrame(
+        [
+            (year, state, deficit)
+            for year, variables in frames_data.items()
+            for state, deficit in zip(
+                variables["locations_with_data"], variables["deficits"]
+            )
+        ],
+        columns=["year", "state", "deficit"],
+    )
+    st.dataframe(frame, height=300)
+
     print_with_timestamp(
         f"Displayed map chart for {chosen_variable}, {chosen_years}, {chosen_cadre}"
     )
@@ -367,18 +381,23 @@ def display_map_chart(
 
 def select_map_parameters(index: dict):
     chosen_variable, chosen_cadre, chosen_year = None, None, None
-    chosen_group = st.segmented_control("Choose Group of Variables:", index.keys())
+    chosen_group = st.radio(
+        "Choose Group of Variables:",
+        c.VARIABLE_GROUP_LABELS.keys(),
+        index=0,
+        format_func=lambda x: c.VARIABLE_GROUP_LABELS[x],
+    )
 
     if chosen_group is not None:
         choice_dict = index[chosen_group]
         chosen_variable = st.selectbox(
-            "Map Variable", sorted(choice_dict.keys()), index=None
+            "Map Variable", sorted(choice_dict.keys()), index=0
         )
 
         if chosen_variable is not None:
             choice_dict = choice_dict[chosen_variable]
             chosen_cadre = st.selectbox(
-                "Map Cadre", sorted(choice_dict.keys()), index=None
+                "Map Cadre", sorted(choice_dict.keys()), index=0
             )
 
             if chosen_cadre is not None:
@@ -387,35 +406,37 @@ def select_map_parameters(index: dict):
     return chosen_variable, chosen_cadre, chosen_year
 
 
-tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
+# tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
 
-with tab_lines:
-    st.title("Deficit over time")
+with st.sidebar:
+    tab_choice = st.radio(
+        label="Distribution Type",
+        options=["Temporal", "Spatial"],
+        index=0,
+    )
+
+if tab_choice == "Temporal":
+    st.subheader("Deficit over time")
     line_gb, line_state_opts, line_varname_opts = load_line_gb(EXCEL_FILE)
 
-    sidebar_col, _, main_col = st.columns([4, 1, 12])
-    with sidebar_col:
+    # sidebar_col, _, main_col = st.columns([4, 1, 12])
+    with st.sidebar:
         chosen_state = st.selectbox("State", line_state_opts)
         chosen_var = st.selectbox("Variable", line_varname_opts)
         st.text(
             f"Showing {len(line_state_opts)} states, {len(line_varname_opts)} variables"
         )
 
-    with main_col:
-        display_line_chart(line_gb, chosen_state, chosen_var)
+    display_line_chart(line_gb, chosen_state, chosen_var)
 
-
-with tab_maps:
-    st.title("Deficit over geography")
+elif tab_choice == "Spatial":
+    st.subheader("Deficit over geography")
     map_gb, index = load_map_gb(EXCEL_FILE)
 
-    sidebar_col, _, main_col = st.columns([4, 1, 12])
-
-    with sidebar_col:
+    with st.sidebar:
         chosen_variable, chosen_cadre, chosen_year = select_map_parameters(index)
 
-    with main_col:
-        if chosen_variable is None or chosen_cadre is None or chosen_year is None:
-            st.markdown("## Please select required parameters using the sidebar")
-        else:
-            display_map_chart(chosen_variable, chosen_cadre, chosen_year)
+    if chosen_variable is None or chosen_cadre is None or chosen_year is None:
+        st.text("Please select ALL required parameters using the sidebar")
+    else:
+        display_map_chart(chosen_variable, chosen_cadre, chosen_year)

@@ -113,6 +113,13 @@ VARIABLE_GROUPS = {
     ],
 }
 
+VARIABLE_GROUP_LABELS = {
+    "ApD": "Acceptability Deficit (ApD)",
+    "AsD": "Accessibility Deficit (AsD)",
+    "QD": "Quality Deficit (QD)",
+    "AvD": "Availability Deficit (AvD)",
+}
+
 # Cadres of interest for the plots
 CADRES_OF_INTEREST = (
     "nurse",
