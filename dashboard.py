@@ -2,6 +2,7 @@ import streamlit as st
 import altair as alt
 import shapely
 import numpy as np
+import pandas as pd
 import json
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from utils import *
 
 
 import plotly.graph_objects as go
+import plotly.express as px
 import altair as alt
 
 
@@ -89,6 +91,158 @@ def load_map_gb(excel_file: str):
             variables[variable][cadre] = [year]
 
     return map_gb, index
+
+
+@st.cache_data
+def load_variable_data(excel_file: str):
+    data = load_raw_data(excel_file)
+    cleaned_data = clean_data(data)
+
+    # Get available states and years from the MultiIndex
+    available_states = []
+    available_years = []
+
+    for state in cleaned_data.index.get_level_values("states").unique():
+        if state != "india":  # Exclude India from state selection
+            available_states.append(state)
+
+    available_years = sorted(cleaned_data.index.get_level_values("year").unique())
+    available_states = sorted(available_states)
+
+    return cleaned_data, available_states, available_years
+
+
+def get_variable_value(cleaned_data, state, year, variable):
+    """
+    Utility function to get a single variable value from the MultiIndex structure.
+    Returns None if the value is missing or NaN.
+    """
+    try:
+        value = cleaned_data.loc[(state, year, variable)].iloc[0]
+        return None if pd.isna(value) else value
+    except (KeyError, IndexError):
+        return None
+
+
+def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
+    """Create radar chart comparing state vs India for all thresholds in a variable group"""
+    print_with_timestamp(
+        f"Creating radar chart for {chosen_state}, {chosen_year}, {variable_group}"
+    )
+
+    # Get variables for the group
+    variables = c.VARIABLE_GROUPS[variable_group]
+
+    # Prepare data for radar chart
+    categories = []
+    state_values = []
+    india_values = []
+
+    for variable in variables:
+        try:
+            # Create shorter label for radar chart (always add to maintain order)
+            label = variable[len(variable_group) + 1 :]
+            label = label[0].upper() + label[1:]
+            categories.append(label)
+
+            # Get scalar values using utility function
+            state_val = get_variable_value(
+                cleaned_data, chosen_state, chosen_year, variable
+            )
+            india_val = get_variable_value(cleaned_data, "india", chosen_year, variable)
+
+            # Use 0 for missing values to maintain chart structure
+            state_values.append(state_val if state_val is not None else 0)
+            india_values.append(india_val if india_val is not None else 0)
+
+        except Exception as e:
+            print_with_timestamp(f"Error processing {variable}: {e}")
+            # Still add to maintain order, use 0 for missing data
+            label = variable[len(variable_group) + 1 :]
+            label = label[0].upper() + label[1:]
+            categories.append(label)
+            state_values.append(0)
+            india_values.append(0)
+
+    if not categories:
+        return None
+
+    # Create radar chart
+    fig = go.Figure()
+
+    # Add state trace
+    fig.add_trace(
+        go.Scatterpolar(
+            r=state_values,
+            theta=categories,
+            fill="toself",
+            name=chosen_state.title(),
+            line_color="blue",
+            fillcolor="rgba(0, 0, 255, 0.1)",
+        )
+    )
+
+    # Add India trace
+    fig.add_trace(
+        go.Scatterpolar(
+            r=india_values,
+            theta=categories,
+            fill="toself",
+            name="India",
+            line_color="red",
+            fillcolor="rgba(255, 0, 0, 0.1)",
+        )
+    )
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[-1, 1]),
+            angularaxis=dict(
+                tickfont=dict(size=10),  # Smaller font size
+                rotation=0,
+                direction="clockwise",
+            ),
+        ),
+        showlegend=True,
+        legend=dict(
+            orientation="h",  # Horizontal legend
+            yanchor="bottom",
+            y=-0.25,  # Position above the chart
+            xanchor="center",
+            x=0.5,
+        ),
+        title=f"{c.VARIABLE_GROUP_LABELS[variable_group]} - {chosen_state.title()} vs India ({chosen_year})",
+        height=450,  # Reduced height since legend is now at top
+        width=600,  # Make charts wider
+        margin=dict(
+            l=80, r=80, t=80, b=80
+        ),  # Adjusted margins - more space at top for legend
+    )
+
+    return fig
+
+
+def create_number_comparison(cleaned_data, chosen_state, chosen_year, variable):
+    """Create number comparison between state and India for AsD or QD"""
+    print_with_timestamp(
+        f"Creating number comparison for {chosen_state}, {chosen_year}, {variable}"
+    )
+
+    try:
+        # Get scalar values using utility function
+        state_value = get_variable_value(
+            cleaned_data, chosen_state, chosen_year, variable
+        )
+        india_value = get_variable_value(cleaned_data, "india", chosen_year, variable)
+
+        if state_value is None or india_value is None:
+            return None, None, f"No {variable} data available for {chosen_year}"
+
+        return state_value, india_value, None
+
+    except Exception as e:
+        print_with_timestamp(f"Error in number comparison: {e}")
+        return None, None, f"Error retrieving {variable} data: {str(e)}"
 
 
 def display_line_chart(line_gb, chosen_state, chosen_variable):
@@ -422,12 +576,23 @@ def select_line_parameters(index):
     return chosen_state, chosen_variable
 
 
+def select_variable_parameters(available_states):
+    """Select state for variable view"""
+    chosen_state = st.selectbox(
+        "Select State",
+        available_states,
+        format_func=lambda x: x.title(),
+        index=0,
+    )
+    return chosen_state
+
+
 # tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
 
 with st.sidebar:
     tab_choice = st.radio(
         label="Distribution Type",
-        options=["Temporal", "Spatial"],
+        options=["Temporal", "Spatial", "Variable"],
         index=0,
     )
 
@@ -452,3 +617,111 @@ elif tab_choice == "Spatial":
         st.text("Please select ALL required parameters using the sidebar")
     else:
         display_map_chart(chosen_variable, chosen_cadre, chosen_year)
+
+elif tab_choice == "Variable":
+    st.subheader("Variable View - State vs India comparison")
+    cleaned_data, available_states, available_years = load_variable_data(EXCEL_FILE)
+
+    with st.sidebar:
+        chosen_state = select_variable_parameters(available_states)
+
+    if chosen_state is None:
+        st.text("Please select a state using the sidebar")
+    else:
+        # Year slider in main canvas
+        chosen_year = st.select_slider(
+            "Select Year",
+            options=available_years,
+            value=available_years[-1] if available_years else 2011,
+            format_func=lambda x: str(x),
+        )
+
+        # Create layout with two columns
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### Acceptability Deficit (ApD)")
+
+            # ApD radar chart
+            apd_chart = create_radar_chart(
+                cleaned_data, chosen_state, chosen_year, "ApD"
+            )
+            if apd_chart:
+                st.plotly_chart(apd_chart, use_container_width=True)
+            else:
+                st.info("No ApD data available for selected parameters")
+
+            # AsD comparison
+            st.markdown("### Accessibility Deficit (AsD)")
+            asd_state, asd_india, asd_error = create_number_comparison(
+                cleaned_data, chosen_state, chosen_year, "AsD"
+            )
+            if asd_error:
+                st.error(asd_error)
+            else:
+                col2_1, col2_2 = st.columns(2)
+                with col2_1:
+                    st.metric(
+                        label=f"{chosen_state.title()}",
+                        value=f"{asd_state:.3f}" if asd_state is not None else "N/A",
+                        delta=(
+                            f"{asd_state - asd_india:.3f}"
+                            if asd_state is not None and asd_india is not None
+                            else None
+                        ),
+                        delta_color="inverse",
+                    )
+                with col2_2:
+                    st.metric(
+                        label="India",
+                        value=f"{asd_india:.3f}" if asd_india is not None else "N/A",
+                    )
+
+        with col2:
+            # AvD radar chart
+            st.markdown("### Availability Deficit (AvD)")
+            avd_chart = create_radar_chart(
+                cleaned_data, chosen_state, chosen_year, "AvD"
+            )
+            if avd_chart:
+                st.plotly_chart(avd_chart, use_container_width=True)
+            else:
+                st.info("No AvD data available for selected parameters")
+            # st.subheader("Number Comparisons")
+
+            # QD comparison
+            st.markdown("### Quality Deficit (QD)")
+            qd_state, qd_india, qd_error = create_number_comparison(
+                cleaned_data, chosen_state, chosen_year, "QD"
+            )
+            if qd_error:
+                st.error(qd_error)
+            else:
+                col2_3, col2_4 = st.columns(2)
+                with col2_3:
+                    st.metric(
+                        label=f"{chosen_state.title()}",
+                        value=f"{qd_state:.3f}" if qd_state is not None else "N/A",
+                        delta=(
+                            f"{qd_state - qd_india:.3f}"
+                            if qd_state is not None and qd_india is not None
+                            else None
+                        ),
+                        delta_color="inverse",
+                    )
+                with col2_4:
+                    st.metric(
+                        label="India",
+                        value=f"{qd_india:.3f}" if qd_india is not None else "N/A",
+                    )
+
+with st.sidebar:
+    st.markdown(
+        """
+---
+**Important:** 
+
+1. Lower deficit values are better.
+2. Deficit values for 2021 and 2031 are projections.
+"""
+    )
