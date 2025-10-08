@@ -131,6 +131,43 @@ CADRES_OF_INTEREST = (
     "skilled health professionals",
 )
 
+STATE_IDS = [
+    "arunachal pradesh",
+    "assam",
+    "chandigarh",
+    "karnataka",
+    "manipur",
+    "meghalaya",
+    "mizoram",
+    "nagaland",
+    "punjab",
+    "rajasthan",
+    "sikkim",
+    "tripura",
+    "uttarakhand",
+    "bihar",
+    "kerala",
+    "madhya pradesh",
+    "gujarat",
+    "lakshadweep",
+    "odisha",
+    "jammu & kashmir",
+    "chhattisgarh",
+    "goa",
+    "haryana",
+    "himachal pradesh",
+    "jharkhand",
+    "tamil nadu",
+    "uttar pradesh",
+    "west bengal",
+    "andhra pradesh",
+    "puducherry",
+    "maharashtra",
+    "n.c.t. of delhi",
+    "andaman & nicobar islands",
+    "dadra & nagar haveli",
+]
+
 # Mapping of state names to abbreviations
 STATE_ABBR = {
     "andhra pradesh": "AP",

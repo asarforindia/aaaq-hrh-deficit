@@ -17,9 +17,8 @@ st.set_page_config(layout="wide")
 st.title("AAAQ HRH Deficit Explorer")
 
 EXCEL_FILE = "Documents/14_07_22_VW_AAAQ_mastersheet__26_NOV_23.xlsx"
-SHAPEFILE_PATH = "Documents/maps-master/States/Admin2"
 GEOJSON_PATH = "Documents/india_states.geojson"
-RESULTS_DIR = "Results/raw-value-based"
+PROCESSED_GEOJSON_CDN_PATH = "https://raw.githubusercontent.com/asarforindia/aaaq-hrh-deficit/refs/heads/main/india-states.geojson"
 
 
 def print_with_timestamp(message):
@@ -55,7 +54,6 @@ def load_line_gb(excel_file: str):
 
 @st.cache_data
 def load_map_geojson() -> dict:
-    # state_geoms = load_state_geometries(SHAPEFILE_PATH)
     state_geoms = load_state_geometries_geojson(GEOJSON_PATH)
     return {
         "type": "FeatureCollection",
@@ -69,16 +67,6 @@ def load_map_geojson() -> dict:
             for k, v in state_geoms.items()
         ],
     }
-
-
-@st.cache_data
-def load_map_geom() -> dict:
-    with open(GEOJSON_PATH, "r") as f:
-        geojson = json.load(f)
-
-    for feature in geojson["features"]:
-        feature["id"] = feature["properties"]["ST_NM"].lower()
-    return geojson
 
 
 @st.cache_data
@@ -193,13 +181,9 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
 
 @st.cache_data(max_entries=300)
 def load_map_data_multiyear(chosen_variable, chosen_years, chosen_cadre):
-    geojson_template = load_map_geojson()
     map_gb, _ = load_map_gb(EXCEL_FILE)
 
-    # Get all state IDs from geojson
-    all_state_ids = [feature["id"] for feature in geojson_template["features"]]
     frames_data = {}
-
     for year in chosen_years:
         series = map_gb.get_group((chosen_variable, chosen_cadre, year)).rename(
             "deficit"
@@ -214,7 +198,7 @@ def load_map_data_multiyear(chosen_variable, chosen_years, chosen_cadre):
         locations_without_data = []
         state_names_without_data = []
 
-        for state_id in all_state_ids:
+        for state_id in c.STATE_IDS:
             if state_id in deficit_dict:
                 locations_with_data.append(state_id)
                 deficits_with_data.append(deficit_dict[state_id])
@@ -231,10 +215,6 @@ def load_map_data_multiyear(chosen_variable, chosen_years, chosen_cadre):
             "state_names_without_data": state_names_without_data,
         }
 
-    print_with_timestamp(
-        f"Loaded map data for {chosen_variable}, {chosen_years}, {chosen_cadre}"
-    )
-
     return frames_data
 
 
@@ -243,9 +223,16 @@ def display_map_chart(
     chosen_cadre: str,
     chosen_years: list[str],
 ):
-    geojson_template = load_map_geojson()
+    print_with_timestamp(
+        f"Requested map chart for {chosen_variable}, {chosen_cadre}, {chosen_years}"
+    )
+
     frames_data = load_map_data_multiyear(
         chosen_variable, tuple(chosen_years), chosen_cadre
+    )
+
+    print_with_timestamp(
+        f"Loaded map data for {chosen_variable}, {chosen_years}, {chosen_cadre}"
     )
 
     # Create initial frame (first year)
@@ -253,11 +240,10 @@ def display_map_chart(
     initial_data = frames_data[first_year]
 
     fig = go.Figure()
-
     # Layer 1: Gray background for missing data
     fig.add_trace(
         go.Choroplethmap(
-            geojson=geojson_template,
+            geojson=PROCESSED_GEOJSON_CDN_PATH,
             locations=initial_data["locations_without_data"],
             z=[0] * len(initial_data["locations_without_data"]),
             featureidkey="id",
@@ -273,7 +259,7 @@ def display_map_chart(
     # Layer 2: Actual data with color scale
     fig.add_trace(
         go.Choroplethmap(
-            geojson=geojson_template,
+            geojson=PROCESSED_GEOJSON_CDN_PATH,
             locations=initial_data["locations_with_data"],
             z=initial_data["deficits"],
             featureidkey="id",
@@ -296,7 +282,7 @@ def display_map_chart(
             go.Frame(
                 data=[
                     go.Choroplethmap(
-                        geojson=geojson_template,
+                        geojson=PROCESSED_GEOJSON_CDN_PATH,
                         locations=year_data["locations_without_data"],
                         z=[0] * len(year_data["locations_without_data"]),
                         featureidkey="id",
@@ -308,7 +294,7 @@ def display_map_chart(
                         customdata=year_data["state_names_without_data"],
                     ),
                     go.Choroplethmap(
-                        geojson=geojson_template,
+                        geojson=PROCESSED_GEOJSON_CDN_PATH,
                         locations=year_data["locations_with_data"],
                         z=year_data["deficits"],
                         featureidkey="id",
@@ -356,6 +342,10 @@ def display_map_chart(
                 ],
             }
         ],
+    )
+
+    print_with_timestamp(
+        f"Displaying map chart for {chosen_variable}, {chosen_cadre}, {chosen_years}"
     )
 
     st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
