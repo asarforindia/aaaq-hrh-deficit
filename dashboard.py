@@ -177,7 +177,7 @@ def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
             theta=categories,
             fill="toself",
             name=chosen_state.title(),
-            line_color="blue",
+            line=dict(color="blue", width=2),
             fillcolor="rgba(0, 0, 255, 0.1)",
         )
     )
@@ -189,18 +189,28 @@ def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
             theta=categories,
             fill="toself",
             name="India",
-            line_color="red",
+            line=dict(color="red", width=2),
             fillcolor="rgba(255, 0, 0, 0.1)",
         )
     )
 
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, range=[-1, 1]),
+            bgcolor="rgba(0,0,0,0)",  # Transparent polar background
+            radialaxis=dict(
+                visible=True,
+                range=[-1, 1],
+                gridwidth=0.3,  # Thinner radial grid lines
+                linewidth=0.3,  # Thinner radial axis line
+                gridcolor="rgba(128,128,128,0.3)",  # Lighter grid color
+            ),
             angularaxis=dict(
                 tickfont=dict(size=10),  # Smaller font size
                 rotation=0,
                 direction="clockwise",
+                gridwidth=0.3,  # Thinner angular grid lines
+                linewidth=0.3,  # Thinner angular axis lines
+                gridcolor="rgba(128,128,128,0.3)",  # Lighter grid color
             ),
         ),
         showlegend=True,
@@ -217,6 +227,8 @@ def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
         margin=dict(
             l=80, r=80, t=80, b=80
         ),  # Adjusted margins - more space at top for legend
+        paper_bgcolor="rgba(0,0,0,0)",  # Transparent paper background
+        plot_bgcolor="rgba(0,0,0,0)",  # Transparent plot background
     )
 
     return fig
