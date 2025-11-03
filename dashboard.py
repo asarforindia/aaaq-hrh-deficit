@@ -232,8 +232,8 @@ def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
             xanchor="center",
             x=0.5,
         ),
-        title=f"{c.VARIABLE_GROUP_LABELS[variable_group]} - {chosen_state.title()} vs India ({chosen_year})",
-        height=450,  # Reduced height since legend is now at top
+        title=f"{c.VARIABLE_GROUP_LABELS[variable_group]} - <br>{chosen_state.title()} vs India ({chosen_year})",
+        height=600,  # Reduced height since legend is now at top
         width=600,  # Make charts wider
         margin=dict(
             l=80, r=80, t=80, b=80
@@ -268,6 +268,34 @@ def create_number_comparison(cleaned_data, chosen_state, chosen_year, variable):
         return None, None, f"Error retrieving {variable} data: {str(e)}"
 
 
+def display_metric_comparison(cleaned_data, chosen_state, chosen_year, metric_type):
+    metric_name = c.VARIABLE_GROUP_LABELS[metric_type]
+    st.markdown(f"### {metric_name}")
+    state_value, india_value, error = create_number_comparison(
+        cleaned_data, chosen_state, chosen_year, metric_type
+    )
+    if error:
+        st.error(error)
+    else:
+        col_left, col_right = st.columns(2)
+        with col_left:
+            st.metric(
+                label=f"{chosen_state.title()}",
+                value=f"{state_value:.3f}" if state_value is not None else "N/A",
+                delta=(
+                    f"{state_value - india_value:.3f}"
+                    if state_value is not None and india_value is not None
+                    else None
+                ),
+                delta_color="inverse",
+            )
+        with col_right:
+            st.metric(
+                label="India",
+                value=f"{india_value:.3f}" if india_value is not None else "N/A",
+            )
+
+
 def display_line_chart(line_gb, chosen_state, chosen_variable):
     print_with_timestamp(f"Displaying line chart for {chosen_state}, {chosen_variable}")
 
@@ -288,27 +316,16 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
         df["Cadre Label"] = df["cadres"].map(lambda x: c.CADRE_LABEL_MAPPING.get(x, x))
         df[deficit_col] = np.clip(df[deficit_col], a_min=-1, a_max=1)
 
-        # Get present cadres and create a consistent color mapping
-        present_cadres = sorted(df["Cadre Label"].unique())
-
-        # Create color range for only the present cadres, maintaining consistency
-        # by using their positions in the full domain
-        present_cadre_colors = []
-        for cadre in present_cadres:
-            cadre_index = CADRE_DOMAIN.index(cadre) if cadre in CADRE_DOMAIN else 0
-            present_cadre_colors.append(
-                CATEGORY10_COLORS[cadre_index % len(CATEGORY10_COLORS)]
-            )
-
         y_min_margin = df[deficit_col].min() - 1
         y_max_margin = df[deficit_col].max() + 1
         df["is_proj"] = df["year"].astype(int) >= c.PROJECTION_YEAR
 
         cadre_selection = alt.selection_point(fields=["Cadre Label"], bind="legend")
+        default_opacity = 0.8
 
         line_chart = (
             alt.Chart(df)
-            .mark_line(strokeOpacity=0.8)
+            .mark_line(strokeOpacity=default_opacity)
             .encode(
                 x=alt.X("year:O", title="Year", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(
@@ -319,9 +336,15 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
                 color=alt.Color(
                     "Cadre Label:N",
                     title="Cadres",
-                    scale=alt.Scale(domain=present_cadres, range=present_cadre_colors),
+                    scale=alt.Scale(domain=CADRE_DOMAIN),
+                    legend=alt.Legend(
+                        symbolLimit=10,
+                        values=sorted(df["Cadre Label"].unique()),
+                    ),
                 ),
-                opacity=alt.condition(cadre_selection, alt.value(0.75), alt.value(0.1)),
+                opacity=alt.condition(
+                    cadre_selection, alt.value(default_opacity), alt.value(0.1)
+                ),
                 tooltip=["year", "Cadre Label", deficit_col],
             )
         )
@@ -329,15 +352,17 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
         # Create the point chart with conditional marker shape and x-axis labels horizontal
         point_chart = (
             alt.Chart(df)
-            .mark_point(filled=True, size=300, fillOpacity=0.8)
+            .mark_point(filled=True, size=300, fillOpacity=default_opacity)
             .encode(
                 x=alt.X("year:O", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(deficit_col),
                 color=alt.Color(
                     "Cadre Label:N",
-                    scale=alt.Scale(domain=present_cadres, range=present_cadre_colors),
+                    scale=alt.Scale(domain=CADRE_DOMAIN),
                 ),
-                opacity=alt.condition(cadre_selection, alt.value(1), alt.value(0.1)),
+                opacity=alt.condition(
+                    cadre_selection, alt.value(default_opacity), alt.value(0.1)
+                ),
                 shape=alt.Shape(
                     "is_proj:N",
                     scale=alt.Scale(domain=[False, True], range=["circle", "triangle"]),
@@ -688,48 +713,35 @@ elif tab_choice == "Variable":
             format_func=lambda x: str(x),
         )
 
-        # Create layout with two columns
-        col1, col2 = st.columns(2)
+        # Create layout with two columns (40% left, 60% right)
+        col1, col2 = st.columns([4, 6])
 
         with col1:
-            st.markdown("### Acceptability Deficit (ApD)")
-
-            # ApD radar chart
-            apd_chart = create_radar_chart(
-                cleaned_data, chosen_state, chosen_year, "ApD"
+            display_metric_comparison(
+                cleaned_data, chosen_state, chosen_year, "ApD_sex_mix"
             )
-            if apd_chart:
-                st.plotly_chart(apd_chart, use_container_width=True)
-            else:
-                st.info("No ApD data available for selected parameters")
 
-            # AsD comparison
-            st.markdown("### Accessibility Deficit (AsD)")
-            asd_state, asd_india, asd_error = create_number_comparison(
-                cleaned_data, chosen_state, chosen_year, "AsD"
+            display_metric_comparison(
+                cleaned_data,
+                chosen_state,
+                chosen_year,
+                "AsD",
             )
-            if asd_error:
-                st.error(asd_error)
-            else:
-                col2_1, col2_2 = st.columns(2)
-                with col2_1:
-                    st.metric(
-                        label=f"{chosen_state.title()}",
-                        value=f"{asd_state:.3f}" if asd_state is not None else "N/A",
-                        delta=(
-                            f"{asd_state - asd_india:.3f}"
-                            if asd_state is not None and asd_india is not None
-                            else None
-                        ),
-                        delta_color="inverse",
-                    )
-                with col2_2:
-                    st.metric(
-                        label="India",
-                        value=f"{asd_india:.3f}" if asd_india is not None else "N/A",
-                    )
+
+            display_metric_comparison(cleaned_data, chosen_state, chosen_year, "QD")
 
         with col2:
+            st.markdown("### Acceptability Deficit Cadre-Mix (ApD Cadre-Mix)")
+
+            # ApD radar chart
+            apd_cadre_mix_chart = create_radar_chart(
+                cleaned_data, chosen_state, chosen_year, "ApD_cadre_mix"
+            )
+            if apd_cadre_mix_chart:
+                st.plotly_chart(apd_cadre_mix_chart, use_container_width=True)
+            else:
+                st.info("No ApD cadre-mix data available for selected parameters")
+
             # AvD radar chart
             st.markdown("### Availability Deficit (AvD)")
             avd_chart = create_radar_chart(
@@ -739,39 +751,12 @@ elif tab_choice == "Variable":
                 st.plotly_chart(avd_chart, use_container_width=True)
             else:
                 st.info("No AvD data available for selected parameters")
-            # st.subheader("Number Comparisons")
-
-            # QD comparison
-            st.markdown("### Quality Deficit (QD)")
-            qd_state, qd_india, qd_error = create_number_comparison(
-                cleaned_data, chosen_state, chosen_year, "QD"
-            )
-            if qd_error:
-                st.error(qd_error)
-            else:
-                col2_3, col2_4 = st.columns(2)
-                with col2_3:
-                    st.metric(
-                        label=f"{chosen_state.title()}",
-                        value=f"{qd_state:.3f}" if qd_state is not None else "N/A",
-                        delta=(
-                            f"{qd_state - qd_india:.3f}"
-                            if qd_state is not None and qd_india is not None
-                            else None
-                        ),
-                        delta_color="inverse",
-                    )
-                with col2_4:
-                    st.metric(
-                        label="India",
-                        value=f"{qd_india:.3f}" if qd_india is not None else "N/A",
-                    )
 
 with st.sidebar:
     st.markdown(
         """
 ---
-**Important:** 
+**General Notes:** 
 
 1. Lower deficit values are better.
 2. Deficit values for 2021 and 2031 are projections.
