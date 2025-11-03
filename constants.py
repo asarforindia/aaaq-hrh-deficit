@@ -68,12 +68,14 @@ VARNAME_MAPPING = {
 }
 
 VARIABLE_GROUPS = {
-    "ApD": [
+    "ApD_cadre_mix": [
         "ApD_cadre_mix_Bhore",
         "ApD_cadre_mix_HLEG",
         "ApD_cadre_mix_IHME_UHC80",
         "ApD_cadre_mix_IHME_UHC90",
         "ApD_cadre_mix_IPHS",
+    ],
+    "ApD_sex_mix": [
         "ApD_sex_mix",
     ],
     "AsD": [
@@ -114,7 +116,8 @@ VARIABLE_GROUPS = {
 }
 
 VARIABLE_GROUP_LABELS = {
-    "ApD": "Acceptability Deficit (ApD)",
+    "ApD_cadre_mix": "Acceptability Deficit Cadre-Mix (ApD Cadre-Mix)",
+    "ApD_sex_mix": "Acceptability Deficit Sex-Mix (ApD Sex-Mix)",
     "AsD": "Accessibility Deficit (AsD)",
     "QD": "Quality Deficit (QD)",
     "AvD": "Availability Deficit (AvD)",

@@ -27,12 +27,23 @@ def print_with_timestamp(message):
     print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]} - {message}")
 
 
-cadre_colors = {
-    cadre: f"C{i}"
-    for i, cadre in enumerate(
-        c.CADRES_OF_INTEREST + ("nursing cadres", "supporting cadres")
-    )
-}
+# Static color mapping for cadres to ensure consistency across variables
+# Define consistent domain for cadre colors (sorted for consistency)
+CADRE_DOMAIN = sorted(set(c.CADRE_LABEL_MAPPING.values()))
+
+# Category10 color palette (Altair's default categorical colors)
+CATEGORY10_COLORS = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf",
+]
 
 
 @st.cache_data
@@ -277,45 +288,64 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
         df["Cadre Label"] = df["cadres"].map(lambda x: c.CADRE_LABEL_MAPPING.get(x, x))
         df[deficit_col] = np.clip(df[deficit_col], a_min=-1, a_max=1)
 
+        # Get present cadres and create a consistent color mapping
+        present_cadres = sorted(df["Cadre Label"].unique())
+
+        # Create color range for only the present cadres, maintaining consistency
+        # by using their positions in the full domain
+        present_cadre_colors = []
+        for cadre in present_cadres:
+            cadre_index = CADRE_DOMAIN.index(cadre) if cadre in CADRE_DOMAIN else 0
+            present_cadre_colors.append(
+                CATEGORY10_COLORS[cadre_index % len(CATEGORY10_COLORS)]
+            )
+
         y_min_margin = df[deficit_col].min() - 1
         y_max_margin = df[deficit_col].max() + 1
         df["is_proj"] = df["year"].astype(int) >= c.PROJECTION_YEAR
 
         cadre_selection = alt.selection_point(fields=["Cadre Label"], bind="legend")
 
-        # Create the line chart
         line_chart = (
             alt.Chart(df)
-            .mark_line()
+            .mark_line(strokeOpacity=0.8)
             .encode(
-                x=alt.X("year:O", title="Year"),
+                x=alt.X("year:O", title="Year", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(
                     deficit_col,
                     title="Deficit",
                     scale=alt.Scale(domain=[y_min_margin, y_max_margin]),
                 ),
-                color=alt.Color("Cadre Label:N", title="Cadre"),
+                color=alt.Color(
+                    "Cadre Label:N",
+                    title="Cadres",
+                    scale=alt.Scale(domain=present_cadres, range=present_cadre_colors),
+                ),
                 opacity=alt.condition(cadre_selection, alt.value(0.75), alt.value(0.1)),
                 tooltip=["year", "Cadre Label", deficit_col],
             )
         )
 
-        # Create the point chart with conditional marker shape
+        # Create the point chart with conditional marker shape and x-axis labels horizontal
         point_chart = (
             alt.Chart(df)
-            .mark_point(filled=True, size=80)
+            .mark_point(filled=True, size=300, fillOpacity=0.8)
             .encode(
-                x=alt.X("year:O"),
+                x=alt.X("year:O", axis=alt.Axis(labelAngle=0)),
                 y=alt.Y(deficit_col),
-                color=alt.Color("Cadre Label:N"),
+                color=alt.Color(
+                    "Cadre Label:N",
+                    scale=alt.Scale(domain=present_cadres, range=present_cadre_colors),
+                ),
                 opacity=alt.condition(cadre_selection, alt.value(1), alt.value(0.1)),
                 shape=alt.Shape(
                     "is_proj:N",
                     scale=alt.Scale(domain=[False, True], range=["circle", "triangle"]),
                     legend=alt.Legend(
-                        title=f"Is projection",
+                        title="Projected Value",
                         symbolType="stroke",
                         symbolFillColor="gray",
+                        labelExpr="datum.value === true ? 'Yes' : 'No'",
                     ),
                 ),
                 tooltip=["year", "Cadre Label", deficit_col],
@@ -332,14 +362,26 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
             .properties(
                 width=600,
                 height=400,
-                title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state}",
+                title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state.title()}",
             )
             .add_params(cadre_selection)
             .interactive()
         )
 
         st.altair_chart(chart, use_container_width=True)
-        st.dataframe(df_origin, height=300)
+        st.caption(
+            "**Disclaimer:** All surplus, i.e., negative values, are capped at -1 in this plot since the focus is on positive values of deficit needing policy attention."
+        )
+        st.markdown("---")
+        df_origin = df_origin.assign(states=df_origin["states"].str.title())
+        df_origin.columns = [
+            "State/UT/National",
+            "Years",
+            "Variable",
+            "Cadres",
+            "Deficit Value",
+        ]
+        st.dataframe(df_origin, height=300, hide_index=True)
         print_with_timestamp(
             f"Displayed line chart for {chosen_state}, {chosen_variable}"
         )
@@ -488,7 +530,7 @@ def display_map_chart(
             zoom=3.6,
         ),
         height=800,
-        title=f"{title_varname} in {title_cadre}",
+        title=f"{title_varname} for {title_cadre}",
         sliders=[
             {
                 "active": 0,
@@ -515,18 +557,22 @@ def display_map_chart(
     )
 
     st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.caption(
+        "**Disclaimer:** The map scale is restricted from +1 to -1 since the policy interest is in the positive deficit values. Grey represents missing/non-calculable values."
+    )
+    st.markdown("---")
 
     frame = pd.DataFrame(
         [
-            (year, state, deficit)
+            (state.title(), year, chosen_variable, chosen_cadre, deficit)
             for year, variables in frames_data.items()
             for state, deficit in zip(
                 variables["locations_with_data"], variables["deficits"]
             )
         ],
-        columns=["year", "state", "deficit"],
+        columns=["State/UT/National", "Years", "Variable", "Cadre", "Deficit Values"],
     )
-    st.dataframe(frame, height=300)
+    st.dataframe(frame, height=300, hide_index=True)
 
     print_with_timestamp(
         f"Displayed map chart for {chosen_variable}, {chosen_years}, {chosen_cadre}"
@@ -536,7 +582,7 @@ def display_map_chart(
 def select_map_parameters(index: dict):
     chosen_variable, chosen_cadre, chosen_year = None, None, None
     chosen_group = st.radio(
-        "Choose Group of Variables:",
+        "Deficit Index",
         c.VARIABLE_GROUP_LABELS.keys(),
         index=0,
         format_func=lambda x: c.VARIABLE_GROUP_LABELS[x],
@@ -544,15 +590,11 @@ def select_map_parameters(index: dict):
 
     if chosen_group is not None:
         choice_dict = index[chosen_group]
-        chosen_variable = st.selectbox(
-            "Map Variable", sorted(choice_dict.keys()), index=0
-        )
+        chosen_variable = st.selectbox("Threshold", sorted(choice_dict.keys()), index=0)
 
         if chosen_variable is not None:
             choice_dict = choice_dict[chosen_variable]
-            chosen_cadre = st.selectbox(
-                "Map Cadre", sorted(choice_dict.keys()), index=0
-            )
+            chosen_cadre = st.selectbox("Cadre", sorted(choice_dict.keys()), index=0)
 
             if chosen_cadre is not None:
                 chosen_year = choice_dict[chosen_cadre]
@@ -564,7 +606,7 @@ def select_line_parameters(index):
     chosen_state, chosen_variable = None, None
 
     chosen_group = st.radio(
-        "Choose Group of Variables:",
+        "Choose Group of Variables",
         c.VARIABLE_GROUP_LABELS.keys(),
         index=0,
         format_func=lambda x: c.VARIABLE_GROUP_LABELS[x],
@@ -572,14 +614,12 @@ def select_line_parameters(index):
 
     if chosen_group is not None:
         choice_dict = index[chosen_group]
-        chosen_variable = st.selectbox(
-            "Chart Variable", sorted(choice_dict.keys()), index=0
-        )
+        chosen_variable = st.selectbox("Threshold", sorted(choice_dict.keys()), index=0)
 
         if chosen_variable is not None:
             state_choices = choice_dict[chosen_variable]
             chosen_state = st.selectbox(
-                "Chart State",
+                "State/UT/National",
                 sorted(state_choices),
                 format_func=lambda x: x.title(),
                 index=0,
@@ -603,7 +643,7 @@ def select_variable_parameters(available_states):
 
 with st.sidebar:
     tab_choice = st.radio(
-        label="Distribution Type",
+        label="Dashboard View",
         options=["Temporal", "Spatial", "Variable"],
         index=0,
     )
