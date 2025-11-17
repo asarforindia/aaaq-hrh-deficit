@@ -108,19 +108,29 @@ def load_map_gb(excel_file: str):
 def load_variable_data(excel_file: str):
     data = load_raw_data(excel_file)
     cleaned_data = clean_data(data)
+    variable_gb = cleaned_data.reset_index().groupby(["states", "cadres", "year"])
 
-    # Get available states and years from the MultiIndex
-    available_states = []
-    available_years = []
+    index = {}
+    for (state, cadre, year), data in variable_gb:
+        if cadre == "all cadres":
+            # The document mentions to exclude all cadres from the index
+            continue
 
-    for state in cleaned_data.index.get_level_values("states").unique():
-        if state != "india":  # Exclude India from state selection
-            available_states.append(state)
+        if state not in index:
+            index[state] = {}
+        if cadre not in index[state]:
+            index[state][cadre] = {}
+        if year not in index[state][cadre]:
+            index[state][cadre][year] = {}
 
-    available_years = sorted(cleaned_data.index.get_level_values("year").unique())
-    available_states = sorted(available_states)
+        for threshold, threshold_variables in c.THRESHOLD_GROUPS.items():
+            data_variables = data["variable"].tolist()
+            threshold_var_list = list(threshold_variables.values())
+            index[state][cadre][year][threshold] = [
+                v for v in data_variables if v in threshold_var_list
+            ]
 
-    return cleaned_data, available_states, available_years
+    return variable_gb, index
 
 
 def get_variable_value(cleaned_data, state, year, variable):
@@ -135,48 +145,8 @@ def get_variable_value(cleaned_data, state, year, variable):
         return None
 
 
-def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
-    """Create radar chart comparing state vs India for all thresholds in a variable group"""
-    print_with_timestamp(
-        f"Creating radar chart for {chosen_state}, {chosen_year}, {variable_group}"
-    )
-
-    # Get variables for the group
-    variables = c.VARIABLE_GROUPS[variable_group]
-
-    # Prepare data for radar chart
-    categories = []
-    state_values = []
-    india_values = []
-
-    for variable in variables:
-        try:
-            # Create shorter label for radar chart (always add to maintain order)
-            label = variable[len(variable_group) + 1 :]
-            label = label[0].upper() + label[1:]
-            categories.append(label)
-
-            # Get scalar values using utility function
-            state_val = get_variable_value(
-                cleaned_data, chosen_state, chosen_year, variable
-            )
-            india_val = get_variable_value(cleaned_data, "india", chosen_year, variable)
-
-            # Use 0 for missing values to maintain chart structure
-            state_values.append(state_val if state_val is not None else 0)
-            india_values.append(india_val if india_val is not None else 0)
-
-        except Exception as e:
-            print_with_timestamp(f"Error processing {variable}: {e}")
-            # Still add to maintain order, use 0 for missing data
-            label = variable[len(variable_group) + 1 :]
-            label = label[0].upper() + label[1:]
-            categories.append(label)
-            state_values.append(0)
-            india_values.append(0)
-
-    if not categories:
-        return None
+def create_radar_chart(categories, state_values, india_values):
+    """Create radar chart comparing state vs India"""
 
     # Create radar chart
     fig = go.Figure()
@@ -232,9 +202,7 @@ def create_radar_chart(cleaned_data, chosen_state, chosen_year, variable_group):
             xanchor="center",
             x=0.5,
         ),
-        title=f"{c.VARIABLE_GROUP_LABELS[variable_group]} - <br>{chosen_state.title()} vs India ({chosen_year})",
-        height=600,  # Reduced height since legend is now at top
-        width=600,  # Make charts wider
+        font=dict(size=12),
         margin=dict(
             l=80, r=80, t=80, b=80
         ),  # Adjusted margins - more space at top for legend
@@ -604,6 +572,76 @@ def display_map_chart(
     )
 
 
+def display_variable_view(
+    variable_gb,
+    chosen_state,
+    chosen_cadre,
+    chosen_year,
+    chosen_threshold,
+    chosen_threshold_variables,
+):
+    print_with_timestamp(
+        f"Displaying variable view for {chosen_state}, {chosen_cadre}, {chosen_year}, {chosen_threshold}, {chosen_threshold_variables}"
+    )
+
+    def make_radar_series(series: pd.Series) -> pd.Series:
+        df = series.reset_index().drop(columns=["index"])
+        df = df[df["variable"].isin(chosen_threshold_variables)]
+        return df.set_index("variable")["default"].rename("value")
+
+    state_series = variable_gb.get_group((chosen_state, chosen_cadre, chosen_year))
+    india_series = variable_gb.get_group(("india", chosen_cadre, chosen_year))
+    state_radar_series = make_radar_series(state_series)
+    india_radar_series = make_radar_series(india_series)
+
+    radar_df = pd.merge(
+        state_radar_series,
+        india_radar_series,
+        left_index=True,
+        right_index=True,
+        suffixes=("_state", "_india"),
+    ).sort_index()
+
+    fig = create_radar_chart(
+        radar_df.index.tolist(),
+        radar_df["value_state"].tolist(),
+        radar_df["value_india"].tolist(),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+    st.caption(
+        "**Disclaimer:** The chart scale is restricted from +1 to -1 since the policy interest is in the positive deficit values. Grey represents missing/non-calculable values."
+    )
+    st.markdown("---")
+
+    df_state = state_series.reset_index().drop(columns=["index"]).copy()
+    df_state = df_state[df_state["variable"].isin(chosen_threshold_variables)]
+    df_state = df_state.rename(
+        columns={
+            "variable": "Variable",
+            "default": "Value",
+            "states": "State/UT/National",
+            "cadres": "Cadre",
+            "year": "Year",
+        }
+    )
+    df_india = india_series.reset_index().drop(columns=["index"]).copy()
+    df_india = df_india[df_india["variable"].isin(chosen_threshold_variables)]
+    df_india = df_india.rename(
+        columns={
+            "variable": "Variable",
+            "default": "Value",
+            "states": "State/UT/National",
+            "cadres": "Cadre",
+            "year": "Year",
+        }
+    )
+    st.dataframe(pd.concat([df_state, df_india]), hide_index=True)
+
+    print_with_timestamp(
+        f"Displayed variable view for {chosen_state}, {chosen_cadre}, {chosen_year}, {chosen_threshold}, {chosen_threshold_variables}"
+    )
+
+
 def select_map_parameters(index: dict):
     chosen_variable, chosen_cadre, chosen_year = None, None, None
     chosen_group = st.radio(
@@ -619,7 +657,12 @@ def select_map_parameters(index: dict):
 
         if chosen_variable is not None:
             choice_dict = choice_dict[chosen_variable]
-            chosen_cadre = st.selectbox("Cadre", sorted(choice_dict.keys()), index=0)
+            chosen_cadre = st.selectbox(
+                "Cadre",
+                sorted(choice_dict.keys()),
+                index=0,
+                format_func=lambda x: c.CADRE_LABEL_MAPPING.get(x, x),
+            )
 
             if chosen_cadre is not None:
                 chosen_year = choice_dict[chosen_cadre]
@@ -653,15 +696,58 @@ def select_line_parameters(index):
     return chosen_state, chosen_variable
 
 
-def select_variable_parameters(available_states):
-    """Select state for variable view"""
+def select_variable_parameters(index):
+    chosen_state, chosen_cadre, chosen_year, chosen_threshold, available_variables = (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
     chosen_state = st.selectbox(
-        "Select State",
-        available_states,
+        "State/UT/National",
+        sorted(index.keys()),
         format_func=lambda x: x.title(),
         index=0,
     )
-    return chosen_state
+
+    if chosen_state is not None:
+        state_dict = index[chosen_state]
+        cadres = sorted(state_dict.keys())
+
+        if cadres:
+            chosen_cadre = st.selectbox(
+                "Cadre",
+                cadres,
+                index=0,
+                format_func=lambda x: c.CADRE_LABEL_MAPPING.get(x, x),
+            )
+
+            if chosen_cadre is not None:
+                cadre_dict = state_dict[chosen_cadre]
+                years = sorted(cadre_dict.keys())
+
+                if years:
+                    chosen_year = st.selectbox("Year", years, index=0)
+
+                    if chosen_year is not None:
+                        year_dict = cadre_dict[chosen_year]
+                        thresholds = sorted(year_dict.keys())
+
+                        if thresholds:
+                            chosen_threshold = st.selectbox(
+                                "Threshold", thresholds, index=0
+                            )
+                            available_variables = year_dict[chosen_threshold]
+
+    return (
+        chosen_state,
+        chosen_cadre,
+        chosen_year,
+        chosen_threshold,
+        available_variables,
+    )
 
 
 # tab_lines, tab_maps = st.tabs(["Deficit over time", "Deficit over geography"])
@@ -697,60 +783,28 @@ elif tab_choice == "Spatial":
 
 elif tab_choice == "Variable":
     st.subheader("Variable View - State vs India comparison")
-    cleaned_data, available_states, available_years = load_variable_data(EXCEL_FILE)
+    variable_gb, index = load_variable_data(EXCEL_FILE)
 
     with st.sidebar:
-        chosen_state = select_variable_parameters(available_states)
+        (
+            chosen_state,
+            chosen_cadre,
+            chosen_year,
+            chosen_threshold,
+            chosen_threshold_variables,
+        ) = select_variable_parameters(index)
 
     if chosen_state is None:
         st.text("Please select a state using the sidebar")
     else:
-        # Year slider in main canvas
-        chosen_year = st.select_slider(
-            "Select Year",
-            options=available_years,
-            value=available_years[-1] if available_years else 2011,
-            format_func=lambda x: str(x),
+        display_variable_view(
+            variable_gb,
+            chosen_state,
+            chosen_cadre,
+            chosen_year,
+            chosen_threshold,
+            chosen_threshold_variables,
         )
-
-        # Create layout with two columns (40% left, 60% right)
-        col1, col2 = st.columns([4, 6])
-
-        with col1:
-            display_metric_comparison(
-                cleaned_data, chosen_state, chosen_year, "ApD_sex_mix"
-            )
-
-            display_metric_comparison(
-                cleaned_data,
-                chosen_state,
-                chosen_year,
-                "AsD",
-            )
-
-            display_metric_comparison(cleaned_data, chosen_state, chosen_year, "QD")
-
-        with col2:
-            st.markdown("### Acceptability Deficit Cadre-Mix (ApD Cadre-Mix)")
-
-            # ApD radar chart
-            apd_cadre_mix_chart = create_radar_chart(
-                cleaned_data, chosen_state, chosen_year, "ApD_cadre_mix"
-            )
-            if apd_cadre_mix_chart:
-                st.plotly_chart(apd_cadre_mix_chart, use_container_width=True)
-            else:
-                st.info("No ApD cadre-mix data available for selected parameters")
-
-            # AvD radar chart
-            st.markdown("### Availability Deficit (AvD)")
-            avd_chart = create_radar_chart(
-                cleaned_data, chosen_state, chosen_year, "AvD"
-            )
-            if avd_chart:
-                st.plotly_chart(avd_chart, use_container_width=True)
-            else:
-                st.info("No AvD data available for selected parameters")
 
 with st.sidebar:
     st.markdown(

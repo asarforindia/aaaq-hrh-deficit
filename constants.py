@@ -13,7 +13,6 @@ CHANGE_COLS = [
 # Mapping of cadre names to labels
 CADRE_LABEL_MAPPING = {
     "nurse": "Nurse",
-    "nursing cadres": "Nurse",
     "dentist": "Dentist",
     "pharmacist": "Pharmacist",
     "anm": "ANM",
@@ -22,6 +21,7 @@ CADRE_LABEL_MAPPING = {
     "skilled health professionals": "Skilled Health Professionals",
     "nursing cadres": "Nursing Cadres",
     "supporting cadres": "Supporting Cadres",
+    "all cadres": "All Cadres",
 }
 
 # Mapping of variable names to labels
@@ -113,6 +113,58 @@ VARIABLE_GROUPS = {
         "AvD_urban_UHC_80",
         "AvD_urban_UHC_90",
     ],
+}
+
+THRESHOLD_GROUPS = {
+    "Bhore": {
+        "ApD_cadre_mix": "ApD_cadre_mix_Bhore",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_Bhore",
+    },
+    "HLEG": {
+        "ApD_cadre_mix": "ApD_cadre_mix_HLEG",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_HLEG",
+    },
+    "IHME_UHC80": {
+        "ApD_cadre_mix": "ApD_cadre_mix_IHME_UHC80",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_IHME_UHC80",
+    },
+    "IHME_UHC90": {
+        "ApD_cadre_mix": "ApD_cadre_mix_IHME_UHC90",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_IHME_UHC90",
+    },
+    "IPHS": {
+        "ApD_cadre_mix": "ApD_cadre_mix_IPHS",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_IPHS",
+    },
+    "MDG": {
+        "ApD_cadre_mix": "ApD_cadre_mix_MDG",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_MDG",
+    },
+    "SDG": {
+        "ApD_cadre_mix": "ApD_cadre_mix_SDG",
+        "ApD_sex_mix": "ApD_sex_mix",
+        "AsD": "AsD",
+        "QD": "QD",
+        "AvD": "AvD_SDG",
+    },
 }
 
 VARIABLE_GROUP_LABELS = {
