@@ -12,15 +12,15 @@ CHANGE_COLS = [
 
 # Mapping of cadre names to labels
 CADRE_LABEL_MAPPING = {
-    "nurse": "Nurse",
-    "dentist": "Dentist",
-    "pharmacist": "Pharmacist",
-    "anm": "ANM",
+    "nurse": "Nurses",
+    "dentist": "Dentists",
+    "pharmacist": "Pharmacists",
+    "anm": "ANMs",
     "ayush": "AYUSH",
-    "doctor": "Doctor",
+    "doctor": "Doctors",
     "skilled health professionals": "Skilled Health Professionals",
     "nursing cadres": "Nursing Cadres",
-    "supporting cadres": "Supporting Cadres",
+    "supporting cadres": "Supporting Cadres (Nurses, Pharmacists, etc.)",
     "all cadres": "All Cadres",
 }
 
