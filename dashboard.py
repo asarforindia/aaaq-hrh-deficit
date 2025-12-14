@@ -264,7 +264,7 @@ def display_metric_comparison(cleaned_data, chosen_state, chosen_year, metric_ty
             )
 
 
-def display_line_chart(line_gb, chosen_state, chosen_variable):
+def display_line_chart(line_gb, chosen_state, chosen_group, chosen_variable):
     print_with_timestamp(f"Displaying line chart for {chosen_state}, {chosen_variable}")
 
     series = line_gb.get_group((chosen_variable, chosen_state))
@@ -358,14 +358,17 @@ def display_line_chart(line_gb, chosen_state, chosen_variable):
                 title=f"{c.VARNAME_MAPPING.get(chosen_variable, chosen_variable)} in {chosen_state.title()}",
             )
             .add_params(cadre_selection)
-            .interactive()
         )
 
         st.altair_chart(chart, use_container_width=True)
         st.caption(
             "**Disclaimer:** All surplus, i.e., negative values, are capped at -1 in this plot since the focus is on positive values of deficit needing policy attention."
         )
+
         st.markdown("---")
+        st.markdown(c.VARIABLE_GROUP_DEFS[chosen_group])
+        st.markdown("---")
+
         df_origin = df_origin.assign(states=df_origin["states"].str.title())
         df_origin.columns = [
             "State/UT/National",
@@ -420,6 +423,7 @@ def load_map_data_multiyear(chosen_variable, chosen_years, chosen_cadre):
 
 
 def display_map_chart(
+    chosen_group: str,
     chosen_variable: str,
     chosen_cadre: str,
     chosen_years: list[str],
@@ -554,6 +558,8 @@ def display_map_chart(
         "**Disclaimer:** The map scale is restricted from +1 to -1 since the policy interest is in the positive deficit values. Grey represents missing/non-calculable values."
     )
     st.markdown("---")
+    st.markdown(c.VARIABLE_GROUP_DEFS[chosen_group])
+    st.markdown("---")
 
     frame = pd.DataFrame(
         [
@@ -563,7 +569,7 @@ def display_map_chart(
                 variables["locations_with_data"], variables["deficits"]
             )
         ],
-        columns=["State/UT/National", "Years", "Variable", "Cadre", "Deficit Values"],
+        columns=["State/UT/National", "Years", "Variable", "Cadres", "Deficit Values"],
     )
     st.dataframe(frame, height=300, hide_index=True)
 
@@ -620,7 +626,7 @@ def display_variable_view(
             "variable": "Variable",
             "default": "Value",
             "states": "State/UT/National",
-            "cadres": "Cadre",
+            "cadres": "Cadres",
             "year": "Year",
         }
     )
@@ -631,7 +637,7 @@ def display_variable_view(
             "variable": "Variable",
             "default": "Value",
             "states": "State/UT/National",
-            "cadres": "Cadre",
+            "cadres": "Cadres",
             "year": "Year",
         }
     )
@@ -658,7 +664,7 @@ def select_map_parameters(index: dict):
         if chosen_variable is not None:
             choice_dict = choice_dict[chosen_variable]
             chosen_cadre = st.selectbox(
-                "Cadre",
+                "Cadres",
                 sorted(choice_dict.keys()),
                 index=0,
                 format_func=lambda x: c.CADRE_LABEL_MAPPING.get(x, x),
@@ -667,7 +673,7 @@ def select_map_parameters(index: dict):
             if chosen_cadre is not None:
                 chosen_year = choice_dict[chosen_cadre]
 
-    return chosen_variable, chosen_cadre, chosen_year
+    return chosen_group, chosen_variable, chosen_cadre, chosen_year
 
 
 def select_line_parameters(index):
@@ -693,7 +699,7 @@ def select_line_parameters(index):
                 index=0,
             )
 
-    return chosen_state, chosen_variable
+    return chosen_state, chosen_group, chosen_variable
 
 
 def select_variable_parameters(index):
@@ -718,7 +724,7 @@ def select_variable_parameters(index):
 
         if cadres:
             chosen_cadre = st.selectbox(
-                "Cadre",
+                "Cadres",
                 cadres,
                 index=0,
                 format_func=lambda x: c.CADRE_LABEL_MAPPING.get(x, x),
@@ -765,21 +771,23 @@ if tab_choice == "Temporal":
 
     # sidebar_col, _, main_col = st.columns([4, 1, 12])
     with st.sidebar:
-        chosen_state, chosen_variable = select_line_parameters(index)
+        chosen_state, chosen_group, chosen_variable = select_line_parameters(index)
 
-    display_line_chart(line_gb, chosen_state, chosen_variable)
+    display_line_chart(line_gb, chosen_state, chosen_group, chosen_variable)
 
 elif tab_choice == "Spatial":
     st.subheader("Deficit over geography")
     map_gb, index = load_map_gb(EXCEL_FILE)
 
     with st.sidebar:
-        chosen_variable, chosen_cadre, chosen_year = select_map_parameters(index)
+        chosen_group, chosen_variable, chosen_cadre, chosen_year = (
+            select_map_parameters(index)
+        )
 
     if chosen_variable is None or chosen_cadre is None or chosen_year is None:
         st.text("Please select ALL required parameters using the sidebar")
     else:
-        display_map_chart(chosen_variable, chosen_cadre, chosen_year)
+        display_map_chart(chosen_group, chosen_variable, chosen_cadre, chosen_year)
 
 elif tab_choice == "Variable":
     st.subheader("Variable View - State vs India comparison")
@@ -807,12 +815,13 @@ elif tab_choice == "Variable":
         )
 
 with st.sidebar:
+
+    st.markdown("---")
     st.markdown(
         """
----
-**General Notes:** 
-
-1. Lower deficit values are better.
-2. Deficit values for 2021 and 2031 are projections.
-"""
+**General Note:**  
+Deficit values for 2021 and 2031 are projections.
+    """
     )
+    st.markdown("---")
+    st.markdown(c.THRESHOLD_DEFS)

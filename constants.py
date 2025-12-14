@@ -45,26 +45,6 @@ VARNAME_MAPPING = {
     "AvD_IPHS": "Availability Deficit (AvD) as per IPHS norms",
     "AvD_MDG": "Availability Deficit (AvD) as per MDG norms",
     "AvD_SDG": "Availability Deficit (AvD) as per SDG norms",
-    "AvD_male_Bhore": "Availability Deficit (AvD) for male population\nas per Bhore norms",
-    "AvD_male_HLEG": "Availability Deficit (AvD) for male population\nas per HLEG norms",
-    "AvD_male_HME_UHC80": "Availability Deficit (AvD) for male population\nas per HME UHC80 norms",
-    "AvD_male_IHME_UHC80": "Availability Deficit (AvD) for male population\nas per IHME UHC80 norms",
-    "AvD_male_IHME_UHC90": "Availability Deficit (AvD) for male population\nas per IHME UHC90 norms",
-    "AvD_male_IPHS": "Availability Deficit (AvD) for male population\nas per IPHS norms",
-    "AvD_male_MDG": "Availability Deficit (AvD) for male population\nas per MDG norms",
-    "AvD_male_SDG": "Availability Deficit (AvD) for male population\nas per SDG norms",
-    "AvD_male_UHC_80": "Availability Deficit (AvD) for male population\nas per UHC80 norms",
-    "AvD_male_UHC_90": "Availability Deficit (AvD) for male population\nas per UHC90 norms",
-    "AvD_urban_Bhore": "Availability Deficit (AvD) for urban population\nas per Bhore norms",
-    "AvD_urban_HLEG": "Availability Deficit (AvD) for urban population\nas per HLEG norms",
-    "AvD_urban_HME_UHC80": "Availability Deficit (AvD) for urban population\nas per HME UHC80 norms",
-    "AvD_urban_IHME_UHC80": "Availability Deficit (AvD) for urban population\nas per IHME UHC80 norms",
-    "AvD_urban_IHME_UHC90": "Availability Deficit (AvD) for urban population\nas per IHME UHC90 norms",
-    "AvD_urban_IPHS": "Availability Deficit (AvD) for urban population\nas per IPHS norms",
-    "AvD_urban_MDG": "Availability Deficit (AvD) for urban population\nas per MDG norms",
-    "AvD_urban_SDG": "Availability Deficit (AvD) for urban population\nas per SDG norms",
-    "AvD_urban_UHC_80": "Availability Deficit (AvD) for urban population\nas per UHC80 norms",
-    "AvD_urban_UHC_90": "Availability Deficit (AvD) for urban population\nas per UHC90 norms",
 }
 
 VARIABLE_GROUPS = {
@@ -92,26 +72,6 @@ VARIABLE_GROUPS = {
         "AvD_IPHS",
         "AvD_MDG",
         "AvD_SDG",
-        "AvD_male_Bhore",
-        "AvD_male_HLEG",
-        "AvD_male_HME_UHC80",
-        "AvD_male_IHME_UHC80",
-        "AvD_male_IHME_UHC90",
-        "AvD_male_IPHS",
-        "AvD_male_MDG",
-        "AvD_male_SDG",
-        "AvD_male_UHC_80",
-        "AvD_male_UHC_90",
-        "AvD_urban_Bhore",
-        "AvD_urban_HLEG",
-        "AvD_urban_HME_UHC80",
-        "AvD_urban_IHME_UHC80",
-        "AvD_urban_IHME_UHC90",
-        "AvD_urban_IPHS",
-        "AvD_urban_MDG",
-        "AvD_urban_SDG",
-        "AvD_urban_UHC_80",
-        "AvD_urban_UHC_90",
     ],
 }
 
@@ -263,3 +223,69 @@ STATE_ABBR = {
 }
 
 PROJECTION_YEAR = 2021
+
+AVD_DEF = """
+## Availability deficit (AvD)
+
+Availability deficit measures the gap between available HRH and context-specific requirement thresholds, 
+ranging theoretically from +1 to –∞. In this plot, all surplus values (AvD < 0) are capped at -1 to maintain focus on positive deficit values, 
+as large negative values can distort the visualization. 
+AvD equals 0 when there is no deficit, takes values >0 to ≤1 when a deficit exists, and is negative when there is a surplus.
+"""
+
+ASD_DEF = """
+## Accessibility Deficit
+
+Accessibility deficit (AsD) measures the deficit of HRH present in rural areas relative to their urban counterparts, 
+ranging theoretically from +1 to –∞. In this plot, all surplus values (AsD < 0) are capped at -1 to maintain focus on positive deficit values, 
+as large negative values can distort the visualization.
+AsD equals 0 when there is no deficit, takes values >0 to ≤1 when a deficit exists, and is negative when there is a surplus.
+"""
+
+APD_SEX_MIX_DEF = """
+## Acceptability Deficit (sex-mix)
+
+Acceptability deficit sex-mix (ApD sex-mix) measures the imbalance of female personnel relative to males for a cadre, 
+ranging theoretically from +1 to –∞. In this plot, all surplus values (ApDsex-mix < 0) are capped at -1 to maintain 
+focus on positive deficit values, as large negative values can distort the visualization.
+ApDsex-mix equals 0 when there is no deficit, takes values >0 to ≤1 when a deficit exists, and is negative when there is a surplus.
+"""
+
+APD_CADRE_MIX_DEF = """
+## Acceptability Deficit (cadre-mix)
+
+Acceptability deficit cadre-mix (ApD cadre-mix) measures the proportion of relatively available nursing or supporting cadres to relatively available doctors, 
+where relative availability is defined as the available HRH density of a cadre divided by its requirement threshold. 
+It can theoretically range from +1 to –∞. 
+In this plot, all surplus values (ApD cadre-mix < 0) are capped at -1 to maintain focus on positive deficit values, 
+as large negative values can distort the visualization. ApDcadre-mix equals 0 when there is no deficit, 
+takes values >0 to ≤1 when a deficit exists, and is negative when there is a surplus.
+"""
+
+QD_DEF = """
+## Quality Deficit
+
+Quality Deficit (QD) measures the paucity of skilled professionals in relation to total HRH i.e, qualified and unqualified. 
+Theoretically, QD can range from 0 to +1. A zero value depicts an adequate number of HRH, 
+while a non-existence of any skilled HRH depicts a +1 value for QD.
+"""
+
+VARIABLE_GROUP_DEFS = {
+    "ApD_cadre_mix": APD_CADRE_MIX_DEF,
+    "ApD_sex_mix": APD_SEX_MIX_DEF,
+    "AsD": ASD_DEF,
+    "QD": QD_DEF,
+    "AvD": AVD_DEF,
+}
+
+THRESHOLD_DEFS = """
+Definitions of norms used in the plots:
+
+* **Bhore:** HRH requirement thresholds recommended by the Bhore Committee, the first national health committee in India.
+* **IPHS:** HRH requirement thresholds outlined in the Indian Public Health Standards, focusing on staffing for the public health system.
+* **HLEG:** HRH requirement thresholds recommended by the High-Level Expert Group on Universal Health Coverage, the most recent national report with HRH guidance.
+* **IHME UHC80:** HRH requirement thresholds estimated by IHME for achieving a Universal Health Coverage (UHC) service coverage index of 80.
+* **IHME UHC90:** HRH requirement thresholds estimated by IHME for achieving a UHC service coverage index of 90.
+* **SDG:** Skilled health professional thresholds recommended by WHO to meet Sustainable Development Goal targets.
+* **MDG:** Skilled health professional thresholds recommended by WHO to meet Millennium Development Goal targets.
+"""
