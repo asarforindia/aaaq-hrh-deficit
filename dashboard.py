@@ -60,7 +60,8 @@ def load_line_gb(excel_file: str):
     variables = {v: index[group][v] for group in index for v in index[group]}
 
     for variable, state in line_gb.groups.keys():
-        variables[variable].append(state)
+        if variable in variables:
+            variables[variable].append(state)
 
     return line_gb, index
 
@@ -96,10 +97,11 @@ def load_map_gb(excel_file: str):
     variables = {v: index[group][v] for group in index for v in index[group]}
 
     for variable, cadre, year in map_gb.groups.keys():
-        if cadre in variables[variable]:
-            variables[variable][cadre].append(year)
-        else:
-            variables[variable][cadre] = [year]
+        if variable in variables:
+            if cadre in variables[variable]:
+                variables[variable][cadre].append(year)
+            else:
+                variables[variable][cadre] = [year]
 
     return map_gb, index
 
